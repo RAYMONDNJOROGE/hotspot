@@ -8,9 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- FIX: Import node-fetch for server-side HTTP requests ---
-// For Node.js versions < 18, this is essential.
-// For Node.js versions >= 18, while global fetch exists, explicitly importing is robust.
-const fetch = require("node-fetch"); // Ensure you have 'node-fetch' installed (npm install node-fetch@2)
+const fetch = require("node-fetch");
 // --- END FIX ---
 
 // --- M-Pesa API Credentials ---
@@ -25,77 +23,65 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 // --- Connect to MongoDB ---
 mongoose
-  .connect(MONGODB_URI, {
-    // useNewUrlParser: true, // Deprecated in recent Mongoose versions, might not be needed
-    // useUnifiedTopology: true, // Deprecated in recent Mongoose versions, might not be needed
-    // useCreateIndex: true, // Deprecated
-    // useFindAndModify: false // Deprecated
-  })
+  .connect(MONGODB_URI) // Modern Mongoose versions don't need the extra options
   .then(() => {
     console.log("[DB] Connected to MongoDB.");
-    // If you had any schema/model creation, it would typically go here
   })
   .catch((err) => {
     console.error("[DB] MongoDB connection error:", err);
-    process.exit(1); // Exit process if database connection fails
+    process.exit(1);
   });
 
 // --- Define Mongoose Schema and Model for Payments ---
-// This defines the structure of your 'payments' collection in MongoDB
 const paymentSchema = new mongoose.Schema({
   MerchantRequestID: { type: String, required: true, unique: true },
   CheckoutRequestID: { type: String, required: true, unique: true },
   ResultCode: { type: Number },
   ResultDesc: { type: String },
   Amount: { type: Number },
-  MpesaReceiptNumber: { type: String, unique: true, sparse: true }, // sparse allows multiple nulls
-  TransactionDate: { type: String }, // Or Date if you parse it
+  MpesaReceiptNumber: { type: String, unique: true, sparse: true },
+  TransactionDate: { type: String },
   PhoneNumber: { type: String },
-  status: { type: String, default: "Pending" }, // Custom status field
-  Timestamp: { type: Date, default: Date.now }, // When the record was created
+  status: { type: String, default: "Pending" },
+  Timestamp: { type: Date, default: Date.now },
 });
 
-const Payment = mongoose.model("Payment", paymentSchema); // 'Payment' will become 'payments' collection
+const Payment = mongoose.model("Payment", paymentSchema);
 
 // --- Middleware ---
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// IMPORTANT: If you want *only* your single index.html to be served for the root,
-// and it contains all CSS/JS, then you remove or comment out the general static serve for '/'
-// If you still have other static assets (e.g., images for API, or different routes) in 'public'
-// then keep the line below, but ensure your main HTML is handled by app.get('/') directly.
-// For this specific request (single HTML file), we'll assume other static assets aren't
-// needed for the root page, or are also embedded.
-
-// If you want to serve other static files for *other* routes (e.g., /admin/dashboard.html, /images/logo.png)
-// from a 'public' directory, you could keep this line, but it wouldn't affect the root '/'
-// if your app.get('/') comes *before* this `express.static` middleware.
-// app.use(express.static("public")); // <--- This line is often before routes for static content
+// --- Serve Static Files ---
+// This line should ideally come before any specific route handlers
+// if those handlers might conflict or if you want static files to be served first.
+// It will serve index.html by default if a request comes for the root '/'.
+app.use(express.static(path.join(__dirname, "public")));
 
 // --- Routes ---
 
-// Route to serve your single HTML file with embedded CSS and JS
-// This MUST come before any other generic static file serving if you want
-// to ensure the root path explicitly serves your index.html.
-app.use(express.static(path.join(__dirname, "public"))); // Serve static files first
-
+// The app.get('/') route is now redundant if index.html is in 'public'
+// and you want it to be the default served file for the root.
+// express.static will automatically serve 'index.html' when '/' is requested.
+// You can remove this specific app.get('/') unless you have a reason to
+// override the default behavior of express.static for the root.
+// For now, I'll comment it out, you can uncomment if you need specific logic for '/'
+/*
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+*/
 
 // Example endpoint to handle STK push request
-// REMOVED: import fetch from "node-fetch"; // This line was causing the error
 app.post("/api/process_payment", async (req, res) => {
-  const { amount, phone } = req.body; // Extract data from request body
+  const { amount, phone } = req.body;
   const timestamp = new Date()
     .toISOString()
     .replace(/[^0-9]/g, "")
     .slice(0, 14);
 
   try {
-    // Get M-Pesa OAuth token
     const auth = Buffer.from(
       `${MPESA_CONSUMER_KEY}:${MPESA_CONSUMER_SECRET}`
     ).toString("base64");
@@ -137,11 +123,11 @@ app.post("/api/process_payment", async (req, res) => {
           Timestamp: timestamp,
           TransactionType: "CustomerPayBillOnline",
           Amount: amount,
-          PartyA: phone, // Customer's phone number
+          PartyA: phone,
           PartyB: MPESA_BUSINESS_SHORTCODE,
           PhoneNumber: phone,
           CallBackURL: MPESA_CALLBACK_URL,
-          AccountReference: "VybzPayments", // Replace with a unique ref if needed
+          AccountReference: "VybzPayments",
           TransactionDesc: "Payment for services",
         }),
       }
@@ -151,14 +137,13 @@ app.post("/api/process_payment", async (req, res) => {
     console.log("STK Push Response:", stkPushData);
 
     if (stkPushData.ResponseCode === "0") {
-      // Store initial STK Push request data in MongoDB
       const newPayment = new Payment({
         MerchantRequestID: stkPushData.MerchantRequestID,
         CheckoutRequestID:
           stkPushData.ResponseCode === "0"
             ? stkPushData.CheckoutRequestID
-            : "N/A", // Only store if successful
-        status: "Pending", // Initial status
+            : "N/A",
+        status: "Pending",
       });
       await newPayment.save();
       console.log("Initial payment request saved to MongoDB.");
@@ -208,7 +193,6 @@ app.post("/api/mpesa_callback/", async (req, res) => {
   const resultDesc = stkCallback.ResultDesc;
 
   try {
-    // Find the payment record by CheckoutRequestID or MerchantRequestID
     const payment = await Payment.findOne({
       $or: [
         { CheckoutRequestID: checkoutRequestID },
@@ -245,7 +229,6 @@ app.post("/api/mpesa_callback/", async (req, res) => {
       console.warn(
         `Payment record for ${merchantRequestID} not found. Creating new entry.`
       );
-      // If not found, create a new record (less ideal but handles missed initial saves)
       const newPayment = new Payment({
         MerchantRequestID: merchantRequestID,
         CheckoutRequestID: checkoutRequestID,
@@ -286,7 +269,7 @@ app.post("/api/mpesa_callback/", async (req, res) => {
 // Endpoint to retrieve all payments (for testing/admin purposes)
 app.get("/api/payments", async (req, res) => {
   try {
-    const payments = await Payment.find({}); // Retrieve all payments
+    const payments = await Payment.find({});
     res.json(payments);
   } catch (error) {
     console.error("Error fetching payments:", error);
@@ -300,9 +283,5 @@ app.listen(PORT, () => {
   console.log(
     `[SERVER] M-Pesa STK Push endpoint: http://localhost:${PORT}/api/process_payment`
   );
-  console.log(`[SERVER] M-Pesa Callback endpoint: ${MPESA_CALLBACK_URL}`); // Use the dynamic URL
+  console.log(`[SERVER] M-Pesa Callback endpoint: ${MPESA_CALLBACK_URL}`);
 });
-// Note: Ensure your MPESA_CALLBACK_URL is set correctly in your .env file
-// and is publicly accessible for M-Pesa to reach it.
-// If you're using a service like ngrok for local development, set MPESA_CALLBACK_URL to the ngrok URL.
-// If you're deploying to a production server, ensure the URL is accessible by M-Pesa.

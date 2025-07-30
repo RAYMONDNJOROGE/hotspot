@@ -3,20 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>wifi</title>
+    <title>Raynger Hotspot Services</title>
+    <link rel="stylesheet" href="/css/style.css" />
   </head>
   <body>
-    <script src="js/script.js"></script>
-    <link rel="stylesheet" href="css/style.css" />
-
     <div class="overlay"></div>
+
     <header>
       <h1 class="header-text">Raynger Hotspot Services</h1>
     </header>
 
-    <!--Hero Section-->
     <main>
-      <!--Description Section-->
       <section class="description">
         <h2 class="description-header">
           Welcome to Raynger Hotspot Services...
@@ -28,7 +25,6 @@
         <hr noshade />
       </section>
 
-      <!--Button Section-->
       <section class="hero">
         <div class="sub-sections">
           <h1 class="p-dsec">2-Hour Vybz</h1>
@@ -111,7 +107,6 @@
       </section>
       <hr />
 
-      <!--Description2 Sec-->
       <section class="des2">
         <div>
           <h2 class="h2-ded"><u>Our Business Model</u></h2>
@@ -121,9 +116,9 @@
           </p>
           <p class="p-ded">
             We aim at fully satisfying every client's need<br />
-            so incase you experience any trouble whatsoever regarding our
+            so in case you experience any trouble whatsoever regarding our
             services, please contact us at:
-            <a href="tel:+" class="tel-link">0717888783</a> <br />
+            <a href="tel:+254717888783" class="tel-link">0717888783</a> <br />
             or e-mail us at:
             <a href="mailto:rayngernet1@gmail.com" class="em-link"
               >rayngernet1@gmail.com</a
@@ -133,20 +128,17 @@
       </section>
       <hr />
 
-      <!--comments-->
-      <form action="submit" autocomplete="off">
+      <form class="comments-form">
         <section class="comments-section">
           <table>
             <th colspan="2"><u>Comments(Optional)</u></th>
             <tr>
-              <td>
-                <label for="firstName">First Name:</label>
-              </td>
+              <td><label for="firstName">First Name:</label></td>
               <td>
                 <input
                   type="text"
                   name="firstName"
-                  id="FirstName"
+                  id="firstName"
                   placeholder="First Name"
                   class="comment-in"
                   required
@@ -154,29 +146,25 @@
               </td>
             </tr>
             <tr>
-              <td>
-                <label for="secondName">Second Name:</label>
-              </td>
+              <td><label for="secondName">Second Name:</label></td>
               <td>
                 <input
                   type="text"
                   name="secondName"
-                  id="SecondName"
-                  placeholder="First Name"
+                  id="secondName"
+                  placeholder="Second Name"
                   class="comment-in"
                   required
                 />
               </td>
             </tr>
             <tr>
-              <td>
-                <label for="phone">Phone Number:</label>
-              </td>
+              <td><label for="commentPhone">Phone Number:</label></td>
               <td>
                 <input
                   type="tel"
                   name="phone"
-                  id="Phoneumber"
+                  id="commentPhone"
                   placeholder="Phone Number"
                   class="comment-in"
                   required
@@ -184,14 +172,12 @@
               </td>
             </tr>
             <tr>
-              <td>
-                <label for="email">E-mail</label>
-              </td>
+              <td><label for="commentEmail">E-mail</label></td>
               <td>
                 <input
                   type="email"
                   name="email"
-                  id="Email"
+                  id="commentEmail"
                   placeholder="E-mail"
                   class="comment-in"
                   required
@@ -199,30 +185,27 @@
               </td>
             </tr>
             <tr>
-              <td><label for="commentsText">Comments:</label></td>
+              <td><label for="textComments">Comments:</label></td>
               <td>
                 <textarea
                   name="commentsText"
-                  id="TextComments"
+                  id="textComments"
                   placeholder="Optional"
                   class="text-area"
                 ></textarea>
               </td>
             </tr>
             <tr>
-              <td><button type="reset" class="com-res">clear</button></td>
-              <td><button type="submit" class="com-sub">submit</button></td>
+              <td><button type="reset" class="com-res">Clear</button></td>
+              <td><button type="submit" class="com-sub">Submit</button></td>
             </tr>
           </table>
         </section>
       </form>
       <hr />
 
-      <!--Response Section-->
-      <section class="payment-popup" style="visibility: hidden">
-        <h2 id="popupHeading" style="margin: 0">
-          Enter your Safaricom phone number to pay
-        </h2>
+      <section class="payment-popup">
+        <h2 id="popupHeading">Enter your Safaricom phone number to pay</h2>
         <form id="paymentForm" autocomplete="off">
           <p
             id="selectedPlanDetails"
@@ -233,7 +216,7 @@
             type="tel"
             name="phoneNumber"
             id="phoneNumber"
-            placeholder="Phone Number"
+            placeholder="e.g., 0712345678 or 254712345678"
             class="comment-in"
             required
           />
@@ -246,23 +229,24 @@
         </form>
       </section>
 
-      <!--Num error popup-->
-      <section class="num-format-error-popup" style="visibility: hidden">
-        <h2 style="color: red; margin: 5px">Invalid Number Format</h2>
+      <section class="num-format-error-popup">
+        <h2 style="color: red">Invalid Number Format</h2>
         <p>Please enter a valid 10-digit phone number.</p>
-        <button type="button" class="com-res" onclick="resetUI()">OK</button>
+        <button type="button" class="com-res">OK</button>
       </section>
 
-      <!--num okay-->
-      <section class="num-okay-popup" style="visibility: hidden">
-        <h2 style="color: #0000ff; margin: 5px">Payment Processing...</h2>
+      <section class="num-okay-popup">
+        <h2 style="color: #0000ff">Payment Processing...</h2>
         <p>
           Your payment is being processed. Please check your phone for a prompt.
         </p>
       </section>
     </main>
+
     <footer>
       <p class="p-footer">Software provided by Raynger Developers</p>
     </footer>
+
+    <script src="/js/script.js" defer></script>
   </body>
 </html>
