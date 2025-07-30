@@ -6,7 +6,6 @@ const mongoose = require("mongoose");
 const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
-const fetch = require("node-fetch");
 
 // --- FIX: Import node-fetch for server-side HTTP requests ---
 // For Node.js versions < 18, this is essential.
