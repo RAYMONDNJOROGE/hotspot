@@ -11,9 +11,6 @@ const PORT = process.env.PORT || 3000;
 // For Node.js versions < 18, this is essential.
 // For Node.js versions >= 18, while global fetch exists, explicitly importing is robust.
 const fetch = require("node-fetch"); // Ensure you have 'node-fetch' installed (npm install node-fetch@2)
-// If you are using Node.js v18+ AND your package.json has "type": "module" (ESM),
-// you would use: import fetch from 'node-fetch';
-// But since you're using 'require', stick to 'node-fetch@2' and const fetch = require('node-fetch');
 // --- END FIX ---
 
 // --- M-Pesa API Credentials ---
@@ -83,11 +80,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // This MUST come before any other generic static file serving if you want
 // to ensure the root path explicitly serves your index.html.
 app.get("/", (req, res) => {
-  // Assuming your index.html is in the same directory as server.js
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // Example endpoint to handle STK push request
+// REMOVED: import fetch from "node-fetch"; // This line was causing the error
 app.post("/api/process_payment", async (req, res) => {
   const { amount, phone } = req.body; // Extract data from request body
   const timestamp = new Date()
@@ -101,7 +98,6 @@ app.post("/api/process_payment", async (req, res) => {
       `${MPESA_CONSUMER_KEY}:${MPESA_CONSUMER_SECRET}`
     ).toString("base64");
     const tokenResponse = await fetch(
-      // THIS `fetch` WAS UNDEFINED
       "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
       {
         method: "GET",
@@ -126,7 +122,6 @@ app.post("/api/process_payment", async (req, res) => {
     ).toString("base64");
 
     const stkPushResponse = await fetch(
-      // THIS `fetch` WAS UNDEFINED
       "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
       {
         method: "POST",
@@ -305,3 +300,7 @@ app.listen(PORT, () => {
   );
   console.log(`[SERVER] M-Pesa Callback endpoint: ${MPESA_CALLBACK_URL}`); // Use the dynamic URL
 });
+// Note: Ensure your MPESA_CALLBACK_URL is set correctly in your .env file
+// and is publicly accessible for M-Pesa to reach it.
+// If you're using a service like ngrok for local development, set MPESA_CALLBACK_URL to the ngrok URL.
+// If you're deploying to a production server, ensure the URL is accessible by M-Pesa.
