@@ -2,10 +2,19 @@ require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const mongoose = require("mongoose"); // Import Mongoose
-const path = require("path"); // Import path module
+const mongoose = require("mongoose");
+const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// --- FIX: Import node-fetch for server-side HTTP requests ---
+// For Node.js versions < 18, this is essential.
+// For Node.js versions >= 18, while global fetch exists, explicitly importing is robust.
+const fetch = require("node-fetch"); // Ensure you have 'node-fetch' installed (npm install node-fetch@2)
+// If you are using Node.js v18+ AND your package.json has "type": "module" (ESM),
+// you would use: import fetch from 'node-fetch';
+// But since you're using 'require', stick to 'node-fetch@2' and const fetch = require('node-fetch');
+// --- END FIX ---
 
 // --- M-Pesa API Credentials ---
 const MPESA_CONSUMER_KEY = process.env.MPESA_CONSUMER_KEY;
@@ -92,6 +101,7 @@ app.post("/api/process_payment", async (req, res) => {
       `${MPESA_CONSUMER_KEY}:${MPESA_CONSUMER_SECRET}`
     ).toString("base64");
     const tokenResponse = await fetch(
+      // THIS `fetch` WAS UNDEFINED
       "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
       {
         method: "GET",
@@ -116,6 +126,7 @@ app.post("/api/process_payment", async (req, res) => {
     ).toString("base64");
 
     const stkPushResponse = await fetch(
+      // THIS `fetch` WAS UNDEFINED
       "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
       {
         method: "POST",
