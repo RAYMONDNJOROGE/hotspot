@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
+const fetch = require("node-fetch");
 
 // --- FIX: Import node-fetch for server-side HTTP requests ---
 // For Node.js versions < 18, this is essential.
@@ -79,6 +80,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Route to serve your single HTML file with embedded CSS and JS
 // This MUST come before any other generic static file serving if you want
 // to ensure the root path explicitly serves your index.html.
+app.use(express.static(path.join(__dirname, "public"))); // Serve static files first
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
