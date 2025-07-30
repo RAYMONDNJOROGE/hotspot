@@ -1,0 +1,16 @@
+# .gitignore
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env
+.DS_Store # macOS specific
+build/ # If you have any build output
+dist/ # If you have any distribution output
+
+# Database files
+*.db # Matches your vybz_payments.db
+*.sqlite
+*.sqlite3
