@@ -3,6 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const mongoose = require("mongoose"); // Import Mongoose
+const path = require("path"); // Import path module
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -55,15 +56,30 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve static files from the 'public' directory
-app.use(express.static("public"));
+// IMPORTANT: If you want *only* your single index.html to be served for the root,
+// and it contains all CSS/JS, then you remove or comment out the general static serve for '/'
+// If you still have other static assets (e.g., images for API, or different routes) in 'public'
+// then keep the line below, but ensure your main HTML is handled by app.get('/') directly.
+// For this specific request (single HTML file), we'll assume other static assets aren't
+// needed for the root page, or are also embedded.
 
-// --- Routes (Modified for Mongoose) ---
+// If you want to serve other static files for *other* routes (e.g., /admin/dashboard.html, /images/logo.png)
+// from a 'public' directory, you could keep this line, but it wouldn't affect the root '/'
+// if your app.get('/') comes *before* this `express.static` middleware.
+// app.use(express.static("public")); // <--- This line is often before routes for static content
+
+// --- Routes ---
+
+// Route to serve your single HTML file with embedded CSS and JS
+// This MUST come before any other generic static file serving if you want
+// to ensure the root path explicitly serves your index.html.
+app.get("/", (req, res) => {
+  // Assuming your index.html is in the same directory as server.js
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
 // Example endpoint to handle STK push request
 app.post("/api/process_payment", async (req, res) => {
-  // ... (your existing M-Pesa STK Push logic) ...
-  // Before making the Daraja API call, save initial payment attempt to MongoDB
   const { amount, phone } = req.body; // Extract data from request body
   const timestamp = new Date()
     .toISOString()
@@ -89,12 +105,10 @@ app.post("/api/process_payment", async (req, res) => {
 
     if (!accessToken) {
       console.error("Failed to get M-Pesa access token:", tokenData);
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Failed to authenticate with M-Pesa.",
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Failed to authenticate with M-Pesa.",
+      });
     }
 
     const password = Buffer.from(
@@ -132,7 +146,10 @@ app.post("/api/process_payment", async (req, res) => {
       // Store initial STK Push request data in MongoDB
       const newPayment = new Payment({
         MerchantRequestID: stkPushData.MerchantRequestID,
-        CheckoutRequestID: stkPushData.CheckoutRequestID,
+        CheckoutRequestID:
+          stkPushData.ResponseCode === "0"
+            ? stkPushData.CheckoutRequestID
+            : "N/A", // Only store if successful
         status: "Pending", // Initial status
       });
       await newPayment.save();
@@ -148,22 +165,18 @@ app.post("/api/process_payment", async (req, res) => {
         "STK Push failed:",
         stkPushData.ResponseDescription || stkPushData.errorMessage
       );
-      res
-        .status(400)
-        .json({
-          success: false,
-          message: "STK push failed.",
-          error: stkPushData,
-        });
+      res.status(400).json({
+        success: false,
+        message: "STK push failed.",
+        error: stkPushData,
+      });
     }
   } catch (error) {
     console.error("Error initiating M-Pesa STK push:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Internal server error during STK push.",
-      });
+    res.status(500).json({
+      success: false,
+      message: "Internal server error during STK push.",
+    });
   }
 });
 
