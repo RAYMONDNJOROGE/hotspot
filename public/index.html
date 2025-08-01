@@ -1,296 +1,194 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Raynger Hotspot Services</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/hover.css/2.3.1/css/hover-min.css">
-    <style>
-        /* Custom animations - Tailwind CDN doesn't process @keyframes directly */
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-            to {
-                opacity: 1;
-            }
-        }
-        @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-        .animate-fade-in-down {
-            animation: fadeInDown 1s ease-out forwards;
-        }
-        .animate-fade-in {
-            animation: fadeIn 1s ease-out forwards 0.5s; /* Delay for subheading */
-        }
-        .animate-scale-in {
-            animation: scaleIn 0.3s ease-out forwards;
-        }
-    </style>
-</head>
-<body class="min-h-screen flex flex-col font-sans text-gray-800 bg-blue-900 antialiased">
-
-    <div class="fixed inset-0 bg-black bg-opacity-70 z-40 hidden" id="overlay"></div>
-
-    <header class="bg-gradient-to-r from-black to-blue-800 text-center p-4 shadow-xl">
-        <h1 class="text-white text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-wide">Raynger Hotspot Services</h1>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+    />
+    <link rel="icon" href="favicon.ico" />
+  </head>
+  <body
+    class="min-h-screen flex flex-col font-sans text-gray-800 bg-blue-900 antialiased"
+  >
+    <header
+      class="bg-gradient-to-r from-black to-blue-800 text-center p-4 shadow-xl"
+    >
+      <h1
+        class="text-white text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-wide"
+      >
+        Raynger Hotspot Services
+      </h1>
     </header>
 
+    <!-- MAC Address Display (hidden by default, shown by JS if present) -->
+    <div id="mac-container" class="text-center mt-4 hidden">
+      <span
+        class="bg-blue-800 text-white px-4 py-2 rounded shadow inline-block"
+      >
+        Your Device MAC Address:
+        <span id="mac-address" class="font-mono"></span>
+      </span>
+    </div>
+
     <main class="flex-grow">
+      <section
+        class="flex flex-wrap justify-center gap-6 md:gap-8 lg:gap-10 p-4 md:p-8 max-w-7xl mx-auto my-8 md:my-12"
+      >
+        <!-- 1-Hour Vybz -->
+        <div
+          class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white"
+        >
+          <h1 class="text-2xl sm:text-3xl font-bold mb-2">1-Hour Vybz</h1>
+          <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 10/-</h2>
+          <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
+          <button
+            type="button"
+            class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
+            data-price="1"
+            data-plan="1-Hour Vybz"
+          >
+            Subscribe
+          </button>
+        </div>
+        <!-- 3-Hour Vybz -->
+        <div
+          class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white"
+        >
+          <h1 class="text-2xl sm:text-3xl font-bold mb-2">3-Hour Vybz</h1>
+          <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 20/-</h2>
+          <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
+          <button
+            type="button"
+            class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
+            data-price="20"
+            data-plan="3-Hour Vybz"
+          >
+            Subscribe
+          </button>
+        </div>
+        <!-- 7-Hour Vybz -->
+        <div
+          class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white"
+        >
+          <h1 class="text-2xl sm:text-3xl font-bold mb-2">7-Hour Vybz</h1>
+          <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 30/-</h2>
+          <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
+          <button
+            type="button"
+            class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
+            data-price="30"
+            data-plan="7-Hour Vybz"
+          >
+            Subscribe
+          </button>
+        </div>
+        <!-- 24-Hour Unlimited -->
+        <div
+          class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white"
+        >
+          <h1 class="text-2xl sm:text-3xl font-bold mb-2">24-Hour Unlimited</h1>
+          <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 50/-</h2>
+          <h3 class="text-lg sm:text-xl font-medium mb-6">Unlimited</h3>
+          <button
+            type="button"
+            class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
+            data-price="50"
+            data-plan="24-Hour Unlimited"
+          >
+            Subscribe
+          </button>
+        </div>
+      </section>
 
-        <section class="text-white text-center py-8 px-4">
-            <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 mt-4">
-                Welcome to Raynger Hotspot Services...
-            </h2>
-            <h3 class="text-lg sm:text-xl md:text-2xl font-medium opacity-90">
-                To subscribe, tap on the subscribe button on the subscription package of your choice.
-            </h3>
-            <hr class="w-2/3 mx-auto border-t-2 border-white border-opacity-30 my-8" />
-        </section>
+      <!-- Payment Popup, Error Popup, Success Popup, Overlay, etc. -->
+      <!-- Place your modal/popups markup here as needed for your UI -->
 
-        <section class="flex flex-wrap justify-center gap-6 md:gap-8 lg:gap-10 p-4 md:p-8 max-w-7xl mx-auto my-8 md:my-12">
-            <div class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">1-Hour Vybz</h1>
-                <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 10/-</h2>
-                <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
-                <button
-                    type="button"
-                    class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
-                    data-price="1"
-                    data-plan="1-Hour Vybz"
-                >
-                    Subscribe
-                </button>
-            </div>
-            <div class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">3-Hour Vybz</h1>
-                <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 20/-</h2>
-                <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
-                <button
-                    type="button"
-                    class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
-                    data-price="20"
-                    data-plan="3-Hour Vybz"
-                >
-                    Subscribe
-                </button>
-            </div>
-            <div class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">7-Hour Vybz</h1>
-                <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 30/-</h2>
-                <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
-                <button
-                    type="button"
-                    class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
-                    data-price="30"
-                    data-plan="7-Hour Vybz"
-                >
-                    Subscribe
-                </button>
-            </div>
-            <div class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">14-Hour Vybz</h1>
-                <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 45/-</h2>
-                <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
-                <button
-                    type="button"
-                    class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
-                    data-price="45"
-                    data-plan="14-Hour Vybz"
-                >
-                    Subscribe
-                </button>
-            </div>
-            <div class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">24-Hour Vybz</h1>
-                <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 70/-</h2>
-                <h3 class="text-lg sm:text-xl font-medium mb-6">MAX 3mbps</h3>
-                <button
-                    type="button"
-                    class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
-                    data-price="70"
-                    data-plan="24-Hour Vybz"
-                >
-                    Subscribe
-                </button>
-            </div>
-            <div class="sub-sections flex flex-col items-center justify-between bg-blue-700 p-6 rounded-lg shadow-xl hover:shadow-2xl transition duration-300 transform hover:-translate-y-2 w-full sm:w-56 lg:w-60 text-center text-white">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">24-Hour Vybz</h1>
-                <h2 class="text-3xl sm:text-4xl font-extrabold mb-2">Kes. 90/-</h2>
-                <h3 class="text-lg sm:text-xl font-medium mb-6">Unlimited</h3>
-                <button
-                    type="button"
-                    class="sub-button bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-3 px-6 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg"
-                    data-price="90"
-                    data-plan="24-Hour Vybz Unlimited"
-                >
-                    Subscribe
-                </button>
-            </div>
-        </section>
-        <hr class="w-2/3 mx-auto border-t-2 border-white border-opacity-30 my-8" />
-
-        <section class="text-white text-center py-8 px-4 max-w-3xl mx-auto">
-            <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 underline">Our Business Model</h2>
-            <p class="text-lg opacity-90 mb-4 leading-relaxed">
-                We deliver fast, reliable, and affordable internet directly to your home. That's the Raynger Hotspot promise.
-            </p>
-            <p class="text-lg opacity-90 leading-relaxed">
-                Your satisfaction is our priority. If you ever experience an issue with our services, please don't hesitate to contact us:
-                <a href="tel:+254717888783" class="text-blue-400 hover:text-blue-300 font-semibold transition duration-300">0717888783</a>
-                <br />
-                or e-mail us at:
-                <a href="mailto:raymondnjoroge20@gmail.com" class="text-blue-400 hover:text-blue-300 font-semibold transition duration-300">raymondnjoroge20@gmail.com</a>
-            </p>
-        </section>
-        <hr class="w-2/3 mx-auto border-t-2 border-white border-opacity-30 my-8" />
-
-        <section class="py-8 px-4 max-w-2xl mx-auto">
-            <form class="bg-blue-700 p-6 sm:p-8 rounded-lg shadow-xl text-white" id="commentsForm">
-                <h2 class="text-2xl sm:text-3xl font-bold text-center mb-6 underline">Comments</h2>
-                <div class="space-y-4">
-                    <div class="flex flex-col sm:flex-row sm:items-center">
-                        <label for="firstName" class="w-full sm:w-1/3 text-lg font-medium mb-1 sm:mb-0">First Name:</label>
-                        <input
-                            type="text"
-                            name="firstName"
-                            id="firstName"
-                            placeholder="First Name"
-                            class="comment-in bg-blue-800 text-white border border-blue-600 rounded-md py-2 px-3 w-full sm:w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-blue-300"
-                            required
-                        />
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center">
-                        <label for="secondName" class="w-full sm:w-1/3 text-lg font-medium mb-1 sm:mb-0">Second Name:</label>
-                        <input
-                            type="text"
-                            name="secondName"
-                            id="secondName"
-                            placeholder="Second Name"
-                            class="comment-in bg-blue-800 text-white border border-blue-600 rounded-md py-2 px-3 w-full sm:w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-blue-300"
-                            required
-                        />
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center">
-                        <label for="commentPhone" class="w-full sm:w-1/3 text-lg font-medium mb-1 sm:mb-0">Phone Number:</label>
-                        <input
-                            type="tel"
-                            name="phone"
-                            id="commentPhone"
-                            placeholder="Phone Number"
-                            class="comment-in bg-blue-800 text-white border border-blue-600 rounded-md py-2 px-3 w-full sm:w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-blue-300"
-                            required
-                        />
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center">
-                        <label for="commentEmail" class="w-full sm:w-1/3 text-lg font-medium mb-1 sm:mb-0">E-mail:</label>
-                        <input
-                            type="email"
-                            name="email"
-                            id="commentEmail"
-                            placeholder="E-mail"
-                            class="comment-in bg-blue-800 text-white border border-blue-600 rounded-md py-2 px-3 w-full sm:w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-blue-300"
-                            required
-                        />
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-start">
-                        <label for="textComments" class="w-full sm:w-1/3 text-lg font-medium mb-1 sm:mb-0 pt-2">Comments:</label>
-                        <textarea
-                            name="commentsText"
-                            id="textComments"
-                            placeholder="Encouraged to help us improve our services"
-                            class="text-area bg-blue-800 text-white border border-blue-600 rounded-md py-2 px-3 w-full sm:w-2/3 h-28 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-y placeholder-blue-300"
-                            required
-                        ></textarea>
-                    </div>
-                    <div class="flex justify-between mt-6 pt-4 border-t border-blue-600">
-                        <button type="reset" class="com-res bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold py-2 px-5 rounded-md transition duration-200 shadow-md hover:shadow-lg">
-                            Clear
-                        </button>
-                        <button type="submit" class="com-sub bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-2 px-5 rounded-md transition duration-200 shadow-md hover:shadow-lg">
-                            Submit
-                        </button>
-                    </div>
-                </form>
-            </section>
-        <hr class="w-2/3 mx-auto border-t-2 border-white border-opacity-30 my-8" />
-
-        <section class="payment-popup fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden" id="paymentPopup">
-            <div class="bg-blue-700 p-8 rounded-lg shadow-2xl text-white text-center w-full max-w-sm sm:max-w-md animate-scale-in">
-                <h2 class="text-2xl sm:text-3xl font-bold mb-4" id="popupHeading">Enter your Safaricom phone number to pay</h2>
-                <form id="paymentForm" autocomplete="off" class="space-y-4">
-                    <p id="selectedPlanDetails" class="text-green-300 font-semibold text-lg"></p>
-                    <div>
-                        <label for="phoneNumber" class="block text-lg font-medium mb-2">Phone Number:</label>
-                        <input
-                            type="tel"
-                            name="phoneNumber"
-                            id="phoneNumber"
-                            placeholder="e.g., 0712345678 or 0112345678"
-                            class="bg-blue-800 text-white border border-blue-600 rounded-md py-2 px-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-blue-300"
-                            required
-                        />
-                    </div>
-                    <div class="flex justify-around mt-6 gap-4">
-                        <button type="submit" class="com-sub bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-2 px-5 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg" id="payButton">
-                            Pay
-                        </button>
-                        <button type="button" class="com-res bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold py-2 px-5 rounded-md w-full transition duration-200 shadow-md hover:shadow-lg" id="closeButton">
-                            Close
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </section>
-
-        <section class="message-popup fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden" id="errorPopup">
-            <div class="bg-blue-700 p-8 rounded-lg shadow-2xl text-white text-center w-full max-w-sm sm:max-w-md animate-scale-in">
-                <h2 class="text-2xl sm:text-3xl font-bold mb-4 text-red-400">Error!</h2>
-                <p class="text-lg mb-6" id="errorMessage"></p>
-                <button type="button" class="com-res bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold py-2 px-5 rounded-md transition duration-200 shadow-md hover:shadow-lg" id="closeErrorButton">
-                    OK
-                </button>
-            </div>
-        </section>
-
-        <section class="message-popup fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden" id="successPopup">
-            <div class="bg-blue-700 p-8 rounded-lg shadow-2xl text-white text-center w-full max-w-sm sm:max-w-md animate-scale-in">
-                <h2 class="text-2xl sm:text-3xl font-bold mb-4 text-blue-400">Processing...</h2>
-                <p class="text-lg mb-6" id="successMessage"></p>
-                <button type="button" class="com-sub bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-semibold py-2 px-5 rounded-md transition duration-200 shadow-md hover:shadow-lg" id="closeSuccessButton">
-                    OK
-                </button>
-            </div>
-        </section>
-
+      <!-- Example: Payment Popup (hidden by default, shown by JS) -->
+      <div
+        id="overlay"
+        class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden"
+      ></div>
+      <div
+        id="paymentPopup"
+        class="fixed z-50 inset-0 flex items-center justify-center hidden"
+      >
+        <form
+          id="paymentForm"
+          class="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full relative"
+        >
+          <button
+            type="button"
+            id="closeButton"
+            class="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+          >
+            &times;
+          </button>
+          <h2 class="text-xl font-bold mb-4 text-blue-800">
+            Enter Your Phone Number
+          </h2>
+          <div id="selectedPlanDetails" class="mb-4 text-gray-700"></div>
+          <input
+            type="tel"
+            id="phoneNumber"
+            name="phoneNumber"
+            required
+            placeholder="07XXXXXXXX"
+            class="w-full px-4 py-2 border rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <button
+            type="submit"
+            id="payButton"
+            class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded transition"
+          >
+            Pay
+          </button>
+        </form>
+      </div>
+      <!-- Error Popup -->
+      <div
+        id="errorPopup"
+        class="fixed z-50 inset-0 flex items-center justify-center hidden"
+      >
+        <div class="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full relative">
+          <button
+            type="button"
+            id="closeErrorButton"
+            class="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+          >
+            &times;
+          </button>
+          <h2 class="text-xl font-bold mb-4 text-red-400">Error!</h2>
+          <div id="errorMessage" class="text-gray-700"></div>
+        </div>
+      </div>
+      <!-- Success Popup -->
+      <div
+        id="successPopup"
+        class="fixed z-50 inset-0 flex items-center justify-center hidden"
+      >
+        <div class="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full relative">
+          <button
+            type="button"
+            id="closeSuccessButton"
+            class="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+          >
+            &times;
+          </button>
+          <h2 class="text-xl font-bold mb-4 text-green-400">Success!</h2>
+          <div id="successMessage" class="text-gray-700"></div>
+        </div>
+      </div>
     </main>
 
-    <footer class="bg-gradient-to-r from-black to-blue-800 text-white text-center p-4 mt-auto">
-       <p class="text-sm sm:text-base">Software provided by Raynger Developers &copy; <span id="currentYear"></span>
-    </p>
+    <footer class="bg-blue-800 text-white text-center py-4 mt-8">
+      &copy; <span id="currentYear"></span> Raynger Hotspot Services. All rights
+      reserved.
     </footer>
+
+    <!-- Your main JS file -->
     <script src="js/script.js"></script>
-</body>
+  </body>
 </html>
