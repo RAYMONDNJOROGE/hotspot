@@ -579,7 +579,10 @@ app.post("/api/submit_comment", async (req, res, next) => {
     const mailOptions = {
       from: EMAIL_USER,
       to: EMAIL_RECIPIENT,
-      subject: `New Comment from Raynger Hotspot Services`,
+      subject: `New Comment from ${firstName || "Anonymous"} ${
+        secondName || ""
+      }`,
+      // Use a simple HTML template for the email body
       html: `
         <h2>New Comment Submission</h2>
         <p><strong>First Name:</strong> ${firstName || "N/A"}</p>
