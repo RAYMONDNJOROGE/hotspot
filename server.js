@@ -174,7 +174,7 @@ app.use(express.static(path.join(__dirname, "public")));
  */
 function normalizePhoneNumber(phone) {
   phone = String(phone).trim();
-  const kenyanPhoneRegex = /^(0(1|7)\d{8}|254(1|7)\d{8})$/;
+  const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
 
   if (!kenyanPhoneRegex.test(phone)) {
     return null; // Invalid format
