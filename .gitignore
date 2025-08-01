@@ -1,16 +1,25 @@
-# .gitignore
-# Node.js
+# Node.js dependencies and logs
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
-.env
-.DS_Store # macOS specific
-build/ # If you have any build output
-dist/ # If you have any distribution output
+pnpm-debug.log*
 
-# Database files
-*.db # Matches your vybz_payments.db
-*.sqlite
-*.sqlite3
+# Environment variables
+.env
+.env.*
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Build and distribution output
+build/
+dist/
+
+# VS Code settings
+.vscode/
+
+# Local database or cache files (if any)
+*.db
+*.log

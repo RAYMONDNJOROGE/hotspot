@@ -1,16 +1,23 @@
 {
   "name": "back-pay",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Node.js backend for M-Pesa-powered MikroTik hotspot payments",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
-  "keywords": [],
+  "keywords": [
+    "mpesa",
+    "mikrotik",
+    "hotspot",
+    "payments",
+    "nodejs",
+    "express"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
@@ -19,13 +26,13 @@
     "mongoose": "^8.17.0",
     "morgan": "^1.10.1",
     "node-fetch": "^2.7.0",
-    "nodemailer": "^7.0.5",
-    "sqlite3": "^5.1.7"
+    "nodemailer": "^7.0.5"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.11"
+    "tailwindcss": "^4.1.11",
+    "nodemon": "^3.1.0"
   },
   "repository": {
     "type": "git",
@@ -34,6 +41,5 @@
   "bugs": {
     "url": "https://github.com/RAYMONDNJOROGE/hotspot/issues"
   },
-  "homepage": "https://github.com/RAYMONDNJOROGE/hotspot#readme",
-  "description": ""
+  "homepage": "https://github.com/RAYMONDNJOROGE/hotspot#readme"
 }
