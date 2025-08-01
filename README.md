@@ -1,4 +1,4 @@
-# Node-Back-Pay: M-Pesa-Powered MikroTik Hotspot Backend
+# Raynger-Hotspot: M-Pesa-Powered MikroTik Hotspot Backend
 
 This project is a Node.js backend for managing M-Pesa-powered payments for MikroTik WiFi hotspots. It enables users to pay for internet access using M-Pesa, and automatically grants or revokes access based on payment status and plan expiry.
 

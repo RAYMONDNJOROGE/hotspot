@@ -1,5 +1,5 @@
 {
-  "name": "back-pay",
+  "name": "Raynger-Hotspot",
   "version": "1.0.0",
   "description": "Node.js backend for M-Pesa-powered MikroTik hotspot payments",
   "main": "server.js",
