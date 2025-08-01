@@ -34,10 +34,6 @@ const MPESA_CALLBACK_URL = process.env.MPESA_CALLBACK_URL;
 const MPESA_API_BASE_URL =
   process.env.MPESA_API_BASE_URL || "https://sandbox.safaricom.co.ke";
 
-// --- Hotspot Service Configuration (MikroTik API) ---
-const HOTSPOT_GATEWAY_URL = process.env.HOTSPOT_GATEWAY_URL;
-const HOTSPOT_API_KEY = process.env.HOTSPOT_API_KEY;
-
 // --- Email Service Configuration from Environment Variables ---
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
@@ -57,8 +53,6 @@ const requiredEnvVars = [
   "EMAIL_USER",
   "EMAIL_PASS",
   "EMAIL_RECIPIENT",
-  "HOTSPOT_GATEWAY_URL", // Added hotspot config
-  "HOTSPOT_API_KEY", // Added hotspot config
 ];
 
 const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
@@ -174,7 +168,7 @@ app.use(express.static(path.join(__dirname, "public")));
  */
 function normalizePhoneNumber(phone) {
   phone = String(phone).trim();
-  const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
+  const kenyanPhoneRegex = /^(0(1|7)\d{8}|254(1|7)\d{8})$/;
 
   if (!kenyanPhoneRegex.test(phone)) {
     return null; // Invalid format
@@ -184,57 +178,6 @@ function normalizePhoneNumber(phone) {
     return "254" + phone.substring(1);
   }
   return phone;
-}
-
-// --- NEW: Helper for activating hotspot service via API call ---
-/**
- * Simulates an API call to a hotspot gateway to activate a user.
- * You must replace this with your actual API integration for MikroTik or other systems.
- * @param {string} phoneNumber - The user's phone number.
- * @param {string} plan - The plan description (e.g., "1 Day Pass").
- */
-async function activateHotspotService(phoneNumber, plan) {
-  try {
-    const activationPayload = {
-      // These are examples; refer to your router's API documentation
-      // For MikroTik, this might be a JSON payload for a user login
-      user_mac: "00:00:00:00:00:00", // You would need to get the user's MAC address from the hotspot login page
-      username: phoneNumber,
-      profile: plan, // Match this with a user profile configured on MikroTik
-      api_key: HOTSPOT_API_KEY,
-    };
-
-    console.log(
-      `[Hotspot] Attempting to activate service for ${phoneNumber} with plan '${plan}'...`
-    );
-
-    const response = await fetch(HOTSPOT_GATEWAY_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(activationPayload),
-    });
-
-    const result = await response.json();
-
-    if (response.ok) {
-      console.log(
-        `[Hotspot] Service activated successfully for ${phoneNumber}.`
-      );
-      // Log the success response from the hotspot API
-      console.log("Hotspot API Response:", result);
-    } else {
-      console.error(`[Hotspot] Failed to activate service for ${phoneNumber}.`);
-      // Log the error response from the hotspot API
-      console.error("Hotspot API Error:", result);
-    }
-  } catch (error) {
-    console.error(
-      `[Hotspot] Critical error calling hotspot API for ${phoneNumber}:`,
-      error
-    );
-  }
 }
 
 // --- Nodemailer transporter setup ---
@@ -481,18 +424,16 @@ app.post("/api/mpesa_callback", async (req, res) => {
         );
 
         // --- YOUR SERVICE FULFILLMENT LOGIC GOES HERE ---
-        // This is the CRITICAL part. If the payment is successful,
-        // you must now call the MikroTik API to activate the user's hotspot.
-        // The `activateHotspotService` helper function I added above is designed for this.
+        // If the payment is successful, this is where you would place the
+        // code to activate your user's service.
         if (updatedPayment.status === "Completed") {
           console.log(
             `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
           );
 
-          // Call the helper function to activate the hotspot
-          // You will need to pass the correct plan and, if possible, the user's MAC address.
-          const plan = updatedPayment.AccountReference; // Assuming this field is populated from the STK push
-          await activateHotspotService(updatedPayment.PhoneNumber, plan);
+          // For example, you might call another API here or execute some other logic.
+          // const plan = updatedPayment.AccountReference;
+          // await yourCustomServiceActivation(updatedPayment.PhoneNumber, plan);
         }
       } else {
         console.warn(
@@ -581,9 +522,6 @@ app.post("/api/submit_comment", async (req, res, next) => {
 
     const info = await transporter.sendMail(mailOptions);
     console.log("Email sent: %s", info.messageId);
-
-    // Consider saving comments to a database for a persistent record.
-    // E.g., const newComment = new Comment({ ... }); await newComment.save();
 
     res
       .status(200)
@@ -681,19 +619,3 @@ process.on("uncaughtException", (err) => {
 });
 
 module.exports = app;
-// Export the app for testing purposes
-if (require.main === module) {
-  // Only start the server if this file is run directly, not imported
-  server.listen(PORT, () => {
-    console.log(`[SERVER] Server is running on http://localhost:${PORT}`);
-    console.log(
-      `[SERVER] Environment: ${process.env.NODE_ENV || "development"}`
-    );
-    console.log(`[SERVER] M-Pesa Callback endpoint: ${MPESA_CALLBACK_URL}`);
-    console.log(`[SERVER] M-Pesa API Base URL: ${MPESA_API_BASE_URL}`);
-  });
-} else {
-  console.log("[SERVER] Server module loaded for testing.");
-}
-// This allows the server to be imported in tests without starting it immediately.
-// You can use `require('./server')` in your test files to access the app instance.
