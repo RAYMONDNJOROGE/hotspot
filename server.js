@@ -6,10 +6,10 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const path = require("path");
-const helmet = require("helmet"); // Security headers for Express
-const morgan = require("morgan"); // Request logging middleware
-const fetch = require("node-fetch"); // For making server-side HTTP requests
-const nodemailer = require("nodemailer"); // Library for sending emails
+const helmet = require("helmet");
+const morgan = require("morgan");
+const fetch = require("node-fetch");
+const nodemailer = require("nodemailer");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -117,7 +117,7 @@ const paymentSchema = new mongoose.Schema(
       ],
     },
     RawCallbackData: { type: mongoose.Schema.Types.Mixed },
-    expiresAt: { type: Date }, // Added for expiry tracking
+    expiresAt: { type: Date },
   },
   {
     timestamps: true,
@@ -292,6 +292,7 @@ app.post("/api/process_payment", async (req, res, next) => {
     const stkPushData = await stkPushResponse.json();
 
     if (stkPushData.ResponseCode === "0") {
+      // Only save if STK push was accepted (not payment success yet)
       const newPayment = new Payment({
         MerchantRequestID: stkPushData.MerchantRequestID,
         CheckoutRequestID: stkPushData.CheckoutRequestID,
@@ -311,30 +312,12 @@ app.post("/api/process_payment", async (req, res, next) => {
         checkoutRequestID: stkPushData.CheckoutRequestID,
       });
     } else {
+      // Do NOT save failed payment attempts
       const errorMessage =
         stkPushData.CustomerMessage ||
         stkPushData.ResponseDescription ||
         stkPushData.errorMessage ||
         "Unknown error from M-Pesa during STK push initiation.";
-
-      const failedPayment = new Payment({
-        MerchantRequestID:
-          stkPushData.MerchantRequestID || `Failed-${Date.now()}`,
-        CheckoutRequestID:
-          stkPushData.CheckoutRequestID || `Failed-${Date.now()}`,
-        status: "Failed",
-        Amount: amount,
-        PhoneNumber: phone,
-        ResultCode: stkPushData.ResponseCode,
-        ResultDesc: errorMessage,
-        RawCallbackData: stkPushData,
-        packageDescription: packageDescription,
-      });
-      await failedPayment
-        .save()
-        .catch((dbErr) =>
-          console.error("Failed to save failed payment attempt:", dbErr)
-        );
 
       throw new APIError(
         `Payment initiation failed: ${errorMessage}`,
@@ -366,15 +349,16 @@ app.post("/api/mpesa_callback", async (req, res) => {
       const checkoutRequestID = stkCallback.CheckoutRequestID;
       const resultCode = stkCallback.ResultCode;
 
-      const updateFields = {
-        ResultCode: resultCode,
-        ResultDesc:
-          stkCallback.ResultDesc || "No specific description provided.",
-        RawCallbackData: callbackData,
-      };
-
       if (resultCode === 0) {
-        updateFields.status = "Completed";
+        // Only update if payment was successful
+        const updateFields = {
+          ResultCode: resultCode,
+          ResultDesc:
+            stkCallback.ResultDesc || "No specific description provided.",
+          RawCallbackData: callbackData,
+          status: "Completed",
+        };
+
         const callbackMetadata = stkCallback.CallbackMetadata;
         if (callbackMetadata && callbackMetadata.Item) {
           callbackMetadata.Item.forEach((item) => {
@@ -410,35 +394,38 @@ app.post("/api/mpesa_callback", async (req, res) => {
         updateFields.expiresAt = new Date(
           Date.now() + durationHours * 60 * 60 * 1000
         );
-      } else {
-        updateFields.status = resultCode === 1032 ? "Cancelled" : "Failed";
-      }
 
-      const query = {
-        $or: [
-          { CheckoutRequestID: checkoutRequestID },
-          { MerchantRequestID: merchantRequestID },
-        ],
-      };
+        const query = {
+          $or: [
+            { CheckoutRequestID: checkoutRequestID },
+            { MerchantRequestID: merchantRequestID },
+          ],
+        };
 
-      const updatedPayment = await Payment.findOneAndUpdate(
-        query,
-        { $set: updateFields },
-        { new: true, upsert: true, runValidators: true }
-      );
-
-      if (updatedPayment) {
-        console.log(
-          `Payment record updated/created for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
+        const updatedPayment = await Payment.findOneAndUpdate(
+          query,
+          { $set: updateFields },
+          { new: true, upsert: false, runValidators: true }
         );
-        if (updatedPayment.status === "Completed") {
+
+        if (updatedPayment) {
           console.log(
-            `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
+            `Payment record updated for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
+          );
+          if (updatedPayment.status === "Completed") {
+            console.log(
+              `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
+            );
+          }
+        } else {
+          console.warn(
+            `[DB Issue] No existing payment found for CheckoutRequestID ${checkoutRequestID}.`
           );
         }
       } else {
-        console.warn(
-          `[DB Issue] findOneAndUpdate did not return a document for CheckoutRequestID ${checkoutRequestID}.`
+        // Do NOT update or create payment for failed/cancelled payments
+        console.log(
+          `Payment not successful for CheckoutRequestID ${checkoutRequestID}. ResultCode: ${resultCode}`
         );
       }
     } catch (error) {
