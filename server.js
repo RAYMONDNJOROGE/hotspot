@@ -15,7 +15,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- Custom Error Class and Centralized Handler ---
-// This provides a consistent way to handle API errors with custom messages and status codes.
 class APIError extends Error {
   constructor(message, statusCode = 500, details = null) {
     super(message);
@@ -44,7 +43,6 @@ const EMAIL_RECIPIENT = process.env.EMAIL_RECIPIENT;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // --- Critical Environment Variable Check ---
-// This log is crucial to know what's missing on server startup. Do not remove.
 const requiredEnvVars = [
   "MPESA_CONSUMER_KEY",
   "MPESA_CONSUMER_SECRET",
@@ -75,7 +73,6 @@ mongoose
     console.log("[DB] Connected to MongoDB successfully.");
   })
   .catch((err) => {
-    // This log is critical for checking if the database connection failed.
     console.error("[DB] MongoDB initial connection error:", err.message);
     process.exit(1);
   });
@@ -120,6 +117,7 @@ const paymentSchema = new mongoose.Schema(
       ],
     },
     RawCallbackData: { type: mongoose.Schema.Types.Mixed },
+    expiresAt: { type: Date }, // Added for expiry tracking
   },
   {
     timestamps: true,
@@ -236,7 +234,6 @@ app.post("/api/process_payment", async (req, res, next) => {
       const tokenError = await tokenResponse
         .json()
         .catch(() => ({ message: "Failed to parse M-Pesa token error" }));
-      // Refined log: Do not log the full tokenError object to prevent data leaks.
       console.error(
         "Failed to get M-Pesa access token. Status:",
         tokenResponse.status,
@@ -253,7 +250,6 @@ app.post("/api/process_payment", async (req, res, next) => {
     const accessToken = tokenData.access_token;
 
     if (!accessToken) {
-      // Refined log: Do not log the full tokenData object.
       console.error(
         "M-Pesa authentication failed unexpectedly: No access token received."
       );
@@ -354,7 +350,6 @@ app.post("/api/process_payment", async (req, res, next) => {
 // M-Pesa Callback URL
 app.post("/api/mpesa_callback", async (req, res) => {
   const callbackData = req.body;
-  // Always return a 200 OK status immediately to M-Pesa.
   res.status(200).json({ MpesaResponse: "Callback received" });
 
   setImmediate(async () => {
@@ -404,6 +399,17 @@ app.post("/api/mpesa_callback", async (req, res) => {
               updateFields.PhoneNumber = item.Value;
           });
         }
+        // Set expiresAt based on plan
+        let durationHours = 1;
+        const desc = updateFields.packageDescription || "";
+        if (desc.includes("3-Hour")) durationHours = 3;
+        else if (desc.includes("7-Hour")) durationHours = 7;
+        else if (desc.includes("14-Hour")) durationHours = 14;
+        else if (desc.includes("24-Hour")) durationHours = 24;
+        if (desc.toLowerCase().includes("unlimited")) durationHours = 24;
+        updateFields.expiresAt = new Date(
+          Date.now() + durationHours * 60 * 60 * 1000
+        );
       } else {
         updateFields.status = resultCode === 1032 ? "Cancelled" : "Failed";
       }
@@ -431,13 +437,11 @@ app.post("/api/mpesa_callback", async (req, res) => {
           );
         }
       } else {
-        // This is a crucial warning log to detect missing payment records.
         console.warn(
           `[DB Issue] findOneAndUpdate did not return a document for CheckoutRequestID ${checkoutRequestID}.`
         );
       }
     } catch (error) {
-      // This is a critical error log for tracking callback failures.
       console.error(
         "CRITICAL: Error processing M-Pesa callback (async background job):",
         error
@@ -462,7 +466,6 @@ app.get(
       });
 
       if (!payment) {
-        // If the record isn't found yet, assume it's still being processed
         return res.status(200).json({
           success: true,
           status: "Processing",
@@ -473,7 +476,6 @@ app.get(
       const responseStatus = payment.status;
       let responseMessage = "Status is pending.";
 
-      // Custom messages based on final status
       if (responseStatus === "Completed") {
         responseMessage =
           "Your payment was successful. Kindly wait for service fulfillment.";
@@ -498,7 +500,6 @@ app.get(
 
 // Endpoint to retrieve all payments (SECURE THIS!)
 app.get("/api/payments", async (req, res, next) => {
-  // This check is a great security practice. It ensures this endpoint is protected in production.
   if (
     process.env.NODE_ENV === "production" &&
     (!req.headers.authorization ||
@@ -587,13 +588,11 @@ app.post("/api/submit_comment", async (req, res, next) => {
 });
 
 // --- Centralized Error Handling Middleware ---
-// This is your most important security measure against leaking server details.
 app.use((err, req, res, next) => {
   const logLevel = err.statusCode && err.statusCode < 500 ? "warn" : "error";
   if (process.env.NODE_ENV !== "production") {
     console[logLevel]("Unhandled Server Error (DEV):", err.stack || err);
   } else {
-    // In production, log a minimal message and no stack trace.
     console[logLevel]("Unhandled Server Error (PROD):", err.message, {
       path: req.path,
       method: req.method,
@@ -625,6 +624,86 @@ app.use((err, req, res, next) => {
     message: message,
     error: errorDetails,
   });
+});
+
+// MikroTik API: Check if a phone number has a valid, unexpired payment
+app.get("/api/mikrotik/check_payment", async (req, res, next) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Phone number is required." });
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phone);
+    if (!normalizedPhone) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid phone number format." });
+    }
+
+    // Find the most recent successful payment
+    const payment = await Payment.findOne({
+      PhoneNumber: normalizedPhone,
+      status: "Completed",
+    }).sort({ createdAt: -1 });
+
+    if (payment) {
+      // Calculate expiry based on plan (example logic)
+      let durationHours = 1;
+      if (payment.packageDescription.includes("3-Hour")) durationHours = 3;
+      else if (payment.packageDescription.includes("7-Hour")) durationHours = 7;
+      else if (payment.packageDescription.includes("14-Hour"))
+        durationHours = 14;
+      else if (payment.packageDescription.includes("24-Hour"))
+        durationHours = 24;
+      if (payment.packageDescription.toLowerCase().includes("unlimited"))
+        durationHours = 24; // or your logic
+
+      // Use expiresAt from DB if available, otherwise calculate
+      let expiresAt = payment.expiresAt
+        ? new Date(payment.expiresAt)
+        : new Date(
+            payment.createdAt.getTime() + durationHours * 60 * 60 * 1000
+          );
+      const now = new Date();
+
+      // Bandwidth logic: determine speed profile
+      let bandwidth = "default";
+      if (payment.packageDescription.toLowerCase().includes("unlimited")) {
+        bandwidth = "unlimited";
+      } else if (
+        payment.packageDescription.toLowerCase().includes("3mbps") ||
+        payment.packageDescription.toLowerCase().includes("vybz")
+      ) {
+        bandwidth = "3mbps";
+      }
+
+      if (now < expiresAt) {
+        return res.json({
+          success: true,
+          paid: true,
+          amount: payment.Amount,
+          plan: payment.packageDescription,
+          bandwidth, // MikroTik can use this to assign speed profile
+          paidAt: payment.createdAt,
+          expiresAt,
+          receipt: payment.MpesaReceiptNumber,
+        });
+      } else {
+        return res.json({
+          success: true,
+          paid: false,
+          message: "Subscription expired.",
+        });
+      }
+    } else {
+      return res.json({ success: true, paid: false });
+    }
+  } catch (error) {
+    next(error);
+  }
 });
 
 // --- Start Server ---
@@ -660,7 +739,6 @@ const shutdown = () => {
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
-// These logs are critical for catching unexpected errors that can crash the server.
 process.on("unhandledRejection", (reason, promise) => {
   console.error("UNHANDLED REJECTION:", reason.message || reason);
 });
