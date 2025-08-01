@@ -1,5 +1,14 @@
 // Configuration: Set your backend API base URL here
 // IMPORTANT: In production, this should be your actual deployed backend URL (e.g., 'https://your-backend-app.onrender.com')
+document.addEventListener("DOMContentLoaded", () => {
+  // Other JavaScript code...
+
+  // Dynamically set the current year in the footer
+  const currentYearSpan = document.getElementById("currentYear");
+  if (currentYearSpan) {
+    currentYearSpan.textContent = new Date().getFullYear();
+  }
+});
 const API_BASE_URL =
   window.location.hostname === "localhost" ||
   window.location.hostname === "hotspot-gved.onrender.com"
