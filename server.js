@@ -475,7 +475,8 @@ app.get(
 
       // Custom messages based on final status
       if (responseStatus === "Completed") {
-        responseMessage = "Your payment was successful. Thank you!";
+        responseMessage =
+          "Your payment was successful. Kindly wait for service fulfillment.";
       } else if (responseStatus === "Cancelled") {
         responseMessage = "You cancelled the M-Pesa payment prompt.";
       } else if (responseStatus === "Failed") {
