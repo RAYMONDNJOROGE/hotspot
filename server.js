@@ -6,15 +6,16 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const path = require("path");
-const helmet = require("helmet"); // Security headers
-const morgan = require("morgan"); // Request logging
-const fetch = require("node-fetch"); // For server-side HTTP requests
-const nodemailer = require("nodemailer"); // Email sending library
+const helmet = require("helmet"); // Security headers for Express
+const morgan = require("morgan"); // Request logging middleware
+const fetch = require("node-fetch"); // For making server-side HTTP requests
+const nodemailer = require("nodemailer"); // Library for sending emails
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- Custom Error Class and Handler ---
+// --- Custom Error Class and Centralized Handler ---
+// This provides a consistent way to handle API errors with custom messages and status codes.
 class APIError extends Error {
   constructor(message, statusCode = 500, details = null) {
     super(message);
@@ -43,6 +44,7 @@ const EMAIL_RECIPIENT = process.env.EMAIL_RECIPIENT;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // --- Critical Environment Variable Check ---
+// Ensures all necessary variables are present before the server starts.
 const requiredEnvVars = [
   "MPESA_CONSUMER_KEY",
   "MPESA_CONSUMER_SECRET",
@@ -103,6 +105,8 @@ const paymentSchema = new mongoose.Schema(
     },
     TransactionDate: { type: Date },
     PhoneNumber: { type: String },
+    // ADDED: Storing the service package selected by the user.
+    packageDescription: { type: String },
     status: {
       type: String,
       default: "Pending",
@@ -296,12 +300,14 @@ app.post("/api/process_payment", async (req, res, next) => {
     const stkPushData = await stkPushResponse.json();
 
     if (stkPushData.ResponseCode === "0") {
+      // REFINED: Now includes packageDescription in the initial payment record.
       const newPayment = new Payment({
         MerchantRequestID: stkPushData.MerchantRequestID,
         CheckoutRequestID: stkPushData.CheckoutRequestID,
         status: "Processing",
         Amount: amount,
         PhoneNumber: phone,
+        packageDescription: packageDescription,
       });
       await newPayment.save();
 
@@ -331,6 +337,8 @@ app.post("/api/process_payment", async (req, res, next) => {
         ResultCode: stkPushData.ResponseCode,
         ResultDesc: errorMessage,
         RawCallbackData: stkPushData,
+        // For failed payments, it's also good practice to store the package description.
+        packageDescription: packageDescription,
       });
       await failedPayment
         .save()
@@ -352,8 +360,10 @@ app.post("/api/process_payment", async (req, res, next) => {
 // M-Pesa Callback URL (Confirmation and Validation URLs go here)
 app.post("/api/mpesa_callback", async (req, res) => {
   const callbackData = req.body;
+  // Always return a 200 OK status immediately to M-Pesa.
   res.status(200).json({ MpesaResponse: "Callback received" });
 
+  // Process the callback data in a non-blocking way using setImmediate.
   setImmediate(async () => {
     try {
       if (!callbackData.Body || !callbackData.Body.stkCallback) {
@@ -423,17 +433,19 @@ app.post("/api/mpesa_callback", async (req, res) => {
           `Payment record updated/created for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
         );
 
-        // --- YOUR SERVICE FULFILLMENT LOGIC GOES HERE ---
-        // If the payment is successful, this is where you would place the
-        // code to activate your user's service.
+        // --- SERVICE FULFILLMENT LOGIC ---
+        // This is the core logic for what happens after a successful payment.
+        // It's placed here to ensure the payment is fully processed and recorded
+        // before attempting to activate the service.
         if (updatedPayment.status === "Completed") {
           console.log(
             `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
           );
 
-          // For example, you might call another API here or execute some other logic.
-          // const plan = updatedPayment.AccountReference;
-          // await yourCustomServiceActivation(updatedPayment.PhoneNumber, plan);
+          // Example: Activating a user's hotspot service based on the package.
+          // const plan = updatedPayment.packageDescription;
+          // const customerPhone = updatedPayment.PhoneNumber;
+          // await activateHotspotService(customerPhone, plan);
         }
       } else {
         console.warn(
