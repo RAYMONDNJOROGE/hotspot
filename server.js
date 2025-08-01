@@ -446,6 +446,55 @@ app.post("/api/mpesa_callback", async (req, res) => {
   });
 });
 
+// NEW: Endpoint for frontend to check the status of a specific payment
+app.get(
+  "/api/check_payment_status/:checkoutRequestID",
+  async (req, res, next) => {
+    try {
+      const { checkoutRequestID } = req.params;
+
+      if (!checkoutRequestID) {
+        throw new APIError("CheckoutRequestID is required.", 400);
+      }
+
+      const payment = await Payment.findOne({
+        CheckoutRequestID: checkoutRequestID,
+      });
+
+      if (!payment) {
+        // If the record isn't found yet, assume it's still being processed
+        return res.status(200).json({
+          success: true,
+          status: "Processing",
+          message: "Payment record not found. Awaiting callback.",
+        });
+      }
+
+      const responseStatus = payment.status;
+      let responseMessage = "Status is pending.";
+
+      // Custom messages based on final status
+      if (responseStatus === "Completed") {
+        responseMessage = "Your payment was successful. Thank you!";
+      } else if (responseStatus === "Cancelled") {
+        responseMessage = "You cancelled the M-Pesa payment prompt.";
+      } else if (responseStatus === "Failed") {
+        responseMessage = "The M-Pesa payment failed. Please try again.";
+      } else if (responseStatus === "Timeout") {
+        responseMessage = "The M-Pesa payment timed out. Please try again.";
+      }
+
+      res.status(200).json({
+        success: true,
+        status: responseStatus,
+        message: responseMessage,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Endpoint to retrieve all payments (SECURE THIS!)
 app.get("/api/payments", async (req, res, next) => {
   // This check is a great security practice. It ensures this endpoint is protected in production.

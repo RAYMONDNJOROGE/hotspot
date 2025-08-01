@@ -37,6 +37,9 @@ document.addEventListener("DOMContentLoaded", () => {
     currentYearSpan.textContent = new Date().getFullYear();
   }
 
+  // Global variable to hold the polling timer
+  let pollingInterval = null;
+
   // --- 2. Helper Functions for UI Management ---
 
   /**
@@ -103,6 +106,12 @@ document.addEventListener("DOMContentLoaded", () => {
     commentsRequiredFields.forEach((field) => {
       field.classList.remove("border-red-500");
     });
+
+    // Stop polling if active
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
   }
 
   /**
@@ -111,6 +120,12 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {'error' | 'success' | 'processing'} type - The type of message to display.
    */
   function displayUserMessage(message, type = "error") {
+    // Clear any active polling when a new message is shown
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+
     resetUI();
 
     let targetPopup, targetMessageElement, targetHeading, targetButton;
@@ -197,6 +212,40 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * Polls the backend for the payment status.
+   * @param {string} checkoutRequestID - The unique ID of the payment request.
+   */
+  async function pollPaymentStatus(checkoutRequestID) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/check_payment_status/${checkoutRequestID}`
+      );
+      const result = await response.json();
+
+      // Check if the status is final (Completed, Cancelled, or Failed)
+      if (
+        ["Completed", "Cancelled", "Failed", "Timeout"].includes(result.status)
+      ) {
+        // Stop polling if a final status is received
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+
+        // Display the final message to the user
+        const messageType = result.status === "Completed" ? "success" : "error";
+        displayUserMessage(result.message, messageType);
+      }
+    } catch (error) {
+      // Stop polling on network errors to prevent infinite loops
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+      displayUserMessage(
+        "An error occurred while checking payment status. Please try again later.",
+        "error"
+      );
+    }
+  }
+
+  /**
    * Handles the payment form submission (STK push initiation).
    * @param {Event} event - The form submission event.
    */
@@ -254,13 +303,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
 
       if (response.ok) {
-        displayUserMessage(
-          result.customerMessage ||
-            result.message ||
-            "Payment request sent! Please check your phone for the M-Pesa prompt.",
-          "success"
-        );
-        setTimeout(resetUI, 7000);
+        // If the payment is initiated successfully, start polling
+        const checkoutRequestID = result.checkoutRequestID;
+        if (checkoutRequestID) {
+          // Poll every 3 seconds for the final status
+          pollingInterval = setInterval(
+            () => pollPaymentStatus(checkoutRequestID),
+            3000
+          );
+        }
       } else {
         const errorMessage =
           result.message ||
@@ -440,4 +491,23 @@ document.addEventListener("DOMContentLoaded", () => {
       "focus:ring-blue-400"
     );
   });
+});
+// --- 4. Additional Enhancements ---
+// Add a scroll-to-top button
+const scrollToTopButton = document.createElement("button");
+scrollToTopButton.textContent = "↑";
+scrollToTopButton.className =
+  "fixed bottom-4 right-4 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400";
+scrollToTopButton.style.display = "none"; // Initially hidden
+document.body.appendChild(scrollToTopButton);
+
+scrollToTopButton.addEventListener("click", () => {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+window.addEventListener("scroll", () => {
+  if (window.scrollY > 300) {
+    scrollToTopButton.style.display = "flex";
+  } else {
+    scrollToTopButton.style.display = "none";
+  }
 });
