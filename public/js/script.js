@@ -1,398 +1,556 @@
-// Configuration: Set your backend API base URL here
-// IMPORTANT: In production, this should be your actual deployed backend URL (e.g., 'https://your-backend-app.onrender.com')
-const API_BASE_URL =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "hotspot-gved.onrender.com"
-    ? "https://hotspot-gved.onrender.com/" // Local development
-    : "https://hotspot-gved.onrender.com/"; // Production URL
-// Ensure the API_BASE_URL is correct for your deployment
-// Note: The API_BASE_URL should match the backend server's URL where your payment processing endpoint is hosted.
-document.addEventListener("DOMContentLoaded", () => {
-  // --- 1. DOM Element Caching ---
-  // Get references to all necessary HTML elements once
-  const overlay = document.getElementById("overlay"); // New overlay element
-  const paymentPopup = document.getElementById("paymentPopup");
-  const errorPopup = document.getElementById("errorPopup");
-  const successPopup = document.getElementById("successPopup");
+// server.js
 
-  const phoneNumberInput = document.getElementById("phoneNumber");
-  const paymentForm = document.getElementById("paymentForm");
-  const planDetailsElement = document.getElementById("selectedPlanDetails");
-  const subscribeButtons = document.querySelectorAll(".sub-button");
+// 1. Load Environment Variables - Always at the very top
+require("dotenv").config();
 
-  const closeButton = document.getElementById("closeButton"); // Close button for the main payment popup
-  const closeErrorButton = document.getElementById("closeErrorButton"); // Close button for the error popup
-  const closeSuccessButton = document.getElementById("closeSuccessButton"); // Close button for the success/processing popup
+// 2. Import Required Modules
+const express = require("express");
+const cors = require("cors");
+const mongoose = require("mongoose");
+const path = require("path");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const fetch = require("node-fetch");
 
-  const errorMessageElement = document.getElementById("errorMessage"); // Paragraph for displaying specific error messages
-  const successMessageElement = document.getElementById("successMessage"); // Paragraph for displaying success/processing messages
+// Import custom utilities
+const APIError = require("./utils/apiError"); // NEW: Import from a separate file
+const { normalizePhoneNumber } = require("./utils/validators"); // NEW: Import from a separate file
 
-  const payButton = document.getElementById("payButton"); // Reference to the Pay button
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  // Comments form elements
-  const commentsForm = document.getElementById("commentsForm");
+// --- M-Pesa API Configuration from Environment Variables ---
+const MPESA_CONSUMER_KEY = process.env.MPESA_CONSUMER_KEY;
+const MPESA_CONSUMER_SECRET = process.env.MPESA_CONSUMER_SECRET;
+const MPESA_BUSINESS_SHORTCODE = process.env.MPESA_BUSINESS_SHORTCODE;
+const MPESA_PASSKEY = process.env.MPESA_PASSKEY;
+const MPESA_CALLBACK_URL = process.env.MPESA_CALLBACK_URL;
+const MPESA_API_BASE_URL =
+  process.env.MPESA_API_BASE_URL || "https://sandbox.safaricom.co.ke";
 
-  // --- 2. Helper Functions for UI Management ---
+// --- MongoDB Connection String (from .env) ---
+const MONGODB_URI = process.env.MONGODB_URI;
 
-  /**
-   * Toggles the visibility of a given HTML element and the overlay.
-   * @param {HTMLElement} element - The DOM element to show or hide.
-   * @param {boolean} isVisible - True to show, false to hide.
-   */
-  function toggleVisibility(element, isVisible) {
-    if (element) {
-      if (isVisible) {
-        element.classList.remove("hidden");
-        overlay.classList.remove("hidden");
-      } else {
-        element.classList.add("hidden");
-        overlay.classList.add("hidden");
-      }
-    }
+// --- Critical Environment Variable Check ---
+const requiredEnvVars = [
+  "MPESA_CONSUMER_KEY",
+  "MPESA_CONSUMER_SECRET",
+  "MPESA_BUSINESS_SHORTCODE",
+  "MPESA_PASSKEY",
+  "MPESA_CALLBACK_URL",
+  "MONGODB_URI",
+];
+const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
+if (missingEnvVars.length > 0) {
+  console.error(
+    `CRITICAL ERROR: The following required environment variables are missing: ${missingEnvVars.join(
+      ", "
+    )}`
+  );
+  process.exit(1);
+}
+
+// --- Connect to MongoDB ---
+mongoose
+  .connect(MONGODB_URI)
+  .then(() => {
+    console.log("[DB] Connected to MongoDB successfully.");
+  })
+  .catch((err) => {
+    console.error("[DB] MongoDB initial connection error:", err.message);
+    process.exit(1);
+  });
+
+// --- Define Mongoose Schema and Model for Payments ---
+const paymentSchema = new mongoose.Schema(
+  {
+    MerchantRequestID: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    CheckoutRequestID: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    ResultCode: { type: Number, index: true },
+    ResultDesc: { type: String },
+    Amount: { type: Number },
+    MpesaReceiptNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    TransactionDate: { type: Date },
+    PhoneNumber: { type: String },
+    status: {
+      type: String,
+      default: "Pending",
+      enum: [
+        "Pending",
+        "Completed",
+        "Failed",
+        "Cancelled",
+        "Processing",
+        "Timeout",
+      ],
+    },
+    RawCallbackData: { type: mongoose.Schema.Types.Mixed },
+  },
+  {
+    timestamps: true,
+    strict: true,
   }
-
-  /**
-   * Resets the UI by hiding all popups and clearing inputs.
-   */
-  function resetUI() {
-    toggleVisibility(paymentPopup, false);
-    toggleVisibility(errorPopup, false);
-    toggleVisibility(successPopup, false);
-    // The overlay's hidden state is managed by toggleVisibility, no need for redundant calls.
-
-    // Reset specific input fields and messages
-    if (phoneNumberInput) {
-      phoneNumberInput.value = "";
-    }
-    if (planDetailsElement) {
-      planDetailsElement.textContent = "";
-    }
-    if (errorMessageElement) {
-      errorMessageElement.textContent = ""; // Clear previous error messages
-    }
-    if (successMessageElement) {
-      successMessageElement.textContent = ""; // Clear previous success messages
-      successPopup.querySelector("h2").textContent = "Processing..."; // Reset heading
-      successPopup.querySelector("#closeSuccessButton").textContent = "OK"; // Reset button text
-      successPopup
-        .querySelector("#closeSuccessButton")
-        .classList.add(
-          "bg-green-600",
-          "hover:bg-green-700",
-          "active:bg-green-800"
-        );
-      successPopup
-        .querySelector("#closeSuccessButton")
-        .classList.remove(
-          "bg-red-600",
-          "hover:bg-red-700",
-          "active:bg-red-800"
-        );
-    }
-    // Re-enable the pay button if it was disabled
-    if (payButton) {
-      payButton.disabled = false;
-      payButton.textContent = "Pay";
-      payButton.classList.remove("opacity-50", "cursor-not-allowed");
-    }
+);
+paymentSchema.pre("save", function (next) {
+  if (this.MpesaReceiptNumber === "") {
+    this.MpesaReceiptNumber = undefined;
   }
+  next();
+});
+const Payment = mongoose.model("Payment", paymentSchema);
 
-  /**
-   * Displays a user message in the dedicated message popup (error or success).
-   * @param {string} message - The message to display.
-   * @param {'error' | 'success' | 'processing'} type - The type of message to display.
-   */
-  function displayUserMessage(message, type = "error") {
-    resetUI(); // Hide all other popups first
+// --- Middleware Configuration ---
+app.use(helmet());
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-    let targetPopup = errorPopup;
-    let targetMessageElement = errorMessageElement;
-    let targetHeading = errorPopup.querySelector("h2");
-    let targetButton = closeErrorButton;
+// NEW: Refined CORS Configuration
+const corsOptions = {
+  origin:
+    process.env.NODE_ENV === "production"
+      ? ["https://hotspot-gved.onrender.com"] // Your production frontend URL
+      : [
+          "http://localhost:3000",
+          "http://localhost:5173",
+          "http://127.0.0.1:5173",
+        ], // Add all local frontend dev URLs
+};
+app.use(cors(corsOptions));
 
-    // Reset heading colors for consistency before setting new ones
-    targetHeading.classList.remove(
-      "text-red-400",
-      "text-green-400",
-      "text-blue-400"
-    );
-    targetButton.classList.remove(
-      "bg-green-600",
-      "hover:bg-green-700",
-      "active:bg-green-800",
-      "bg-red-600",
-      "hover:bg-red-700",
-      "active:bg-red-800"
-    );
+// Serve Static Files - Ensure this points to where your index.html is
+app.use(express.static(path.join(__dirname, "public")));
 
-    if (type === "success" || type === "processing") {
-      targetPopup = successPopup;
-      targetMessageElement = successMessageElement;
-      targetHeading = successPopup.querySelector("h2");
-      targetButton = closeSuccessButton;
+// --- API Routes ---
 
-      if (type === "success") {
-        targetHeading.classList.add("text-green-400"); // Green for success
-        targetHeading.textContent = "Payment Successful!";
-        targetButton.textContent = "Done";
-        targetButton.classList.add(
-          "bg-green-600",
-          "hover:bg-green-700",
-          "active:bg-green-800"
-        );
-      } else {
-        // 'processing'
-        targetHeading.classList.add("text-blue-400"); // Blue for processing
-        targetHeading.textContent = "Processing...";
-        targetButton.textContent = "OK";
-        targetButton.classList.add(
-          "bg-green-600",
-          "hover:bg-green-700",
-          "active:bg-green-800"
-        );
-      }
-    } else {
-      // 'error'
-      targetHeading.classList.add("text-red-400"); // Red for errors
-      targetHeading.textContent = "Error!";
-      targetButton.textContent = "OK";
-      targetButton.classList.add(
-        "bg-red-600",
-        "hover:bg-red-700",
-        "active:bg-red-800"
+// M-Pesa Payment Initiation API Endpoint
+app.post("/api/process_payment", async (req, res, next) => {
+  try {
+    let { amount, phone, packageDescription } = req.body; // --- Input Validation ---
+
+    if (!amount || !phone || !packageDescription) {
+      throw new APIError(
+        "Missing required payment details: amount, phone, or package description.",
+        400
       );
     }
-
-    if (targetMessageElement) {
-      targetMessageElement.textContent = message;
-    }
-
-    toggleVisibility(targetPopup, true);
-  }
-
-  /**
-   * Handles the display of the payment popup when a subscribe button is clicked.
-   * @param {Event} event - The click event.
-   */
-  function showPaymentPopupHandler(event) {
-    const selectedAmount = event.target.dataset.price;
-    const selectedPlan = event.target.dataset.plan;
-
-    if (!selectedAmount || !selectedPlan) {
-      console.error(
-        "Error: Missing data-price or data-plan on the clicked subscribe button."
+    amount = parseFloat(amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw new APIError(
+        "Invalid amount provided. Amount must be a positive number.",
+        400
       );
-      displayUserMessage(
-        "An issue occurred with plan selection. Please try again.",
-        "error"
-      );
-      return;
     }
-
-    // Store data directly on the paymentForm for easier access during submission
-    paymentForm.dataset.amount = selectedAmount;
-    paymentForm.dataset.plan = selectedPlan;
-
-    if (planDetailsElement) {
-      planDetailsElement.textContent = `You selected: ${selectedPlan} for Kes. ${selectedAmount}/-`;
-    }
-
-    resetUI(); // Ensure a clean slate
-    toggleVisibility(paymentPopup, true);
-  }
-
-  /**
-   * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx, 01xxxxxxxxx)
-   * @param {string} phone - The phone number string.
-   * @returns {string|null} The normalized phone number (254XXXXXXXXX) or null if invalid.
-   */
-  function validateAndNormalizePhoneNumber(phone) {
-    phone = String(phone).trim();
-
-    // Regex for Kenyan mobile numbers: starts with 07, 01, 2547, or 2541 followed by 8 digits.
-    const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
-
-    if (!kenyanPhoneRegex.test(phone)) {
-      return null; // Invalid format
-    }
-
-    // Normalize to 254 format
-    if (phone.startsWith("0")) {
-      return "254" + phone.substring(1);
-    }
-    return phone; // Already in 254 format
-  }
-
-  /**
-   * Handles the payment form submission (STK push initiation).
-   * @param {Event} event - The form submission event.
-   */
-  async function handlePaymentSubmission(event) {
-    event.preventDefault(); // Prevent default form submission
-
-    // Disable the pay button to prevent multiple clicks
-    payButton.disabled = true;
-    payButton.textContent = "Processing...";
-    payButton.classList.add("opacity-50", "cursor-not-allowed");
-
-    let phoneNumber = phoneNumberInput.value;
-    const normalizedPhone = validateAndNormalizePhoneNumber(phoneNumber);
-
+    const normalizedPhone = normalizePhoneNumber(phone);
     if (!normalizedPhone) {
-      displayUserMessage(
-        "Invalid phone number. Please enter a valid Kenyan mobile number (e.g., 0712345678 or 0112345678).",
-        "error"
+      throw new APIError(
+        "Invalid phone number format. Please use a valid Kenyan Safaricom mobile number (e.g., 07XXXXXXXX or 01XXXXXXXX).",
+        400
       );
-      // Button re-enabled by displayUserMessage -> resetUI
-      return;
     }
-    phoneNumber = normalizedPhone; // Use the normalized phone number
+    phone = normalizedPhone;
 
-    const amount = paymentForm.dataset.amount;
-    const packageDescription = paymentForm.dataset.plan;
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[^0-9]/g, "")
+      .slice(0, 14);
 
-    // Double-check amount and plan from data attributes
-    if (!amount || !packageDescription) {
-      displayUserMessage(
-        "Missing payment details. Please re-select your plan.",
-        "error"
-      );
-      // Button re-enabled by displayUserMessage -> resetUI
-      return;
-    }
+    const auth = Buffer.from(
+      `${MPESA_CONSUMER_KEY}:${MPESA_CONSUMER_SECRET}`
+    ).toString("base64");
 
-    // Show a "processing" message
-    displayUserMessage(
-      "Your payment request is being sent. Please check your phone for the M-Pesa prompt.",
-      "processing"
+    const tokenResponse = await fetch(
+      `${MPESA_API_BASE_URL}/oauth/v1/generate?grant_type=client_credentials`,
+      {
+        method: "GET",
+        headers: { Authorization: `Basic ${auth}` },
+      }
     );
 
-    const data = {
-      amount: parseFloat(amount),
-      phone: phoneNumber,
-      packageDescription: packageDescription,
+    if (!tokenResponse.ok) {
+      const tokenError = await tokenResponse
+        .json()
+        .catch(() => ({ message: "Failed to parse M-Pesa token error" }));
+      console.error(
+        "Failed to get M-Pesa access token:",
+        tokenResponse.status,
+        tokenError
+      );
+      throw new APIError(
+        "Failed to authenticate with M-Pesa. Please try again later.",
+        tokenResponse.status,
+        process.env.NODE_ENV !== "production" ? tokenError : undefined
+      );
+    }
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      console.error("M-Pesa access token not found in response:", tokenData);
+      throw new APIError(
+        "M-Pesa authentication failed unexpectedly: No access token received.",
+        500
+      );
+    }
+
+    const password = Buffer.from(
+      `${MPESA_BUSINESS_SHORTCODE}${MPESA_PASSKEY}${timestamp}`
+    ).toString("base64");
+
+    const stkPushPayload = {
+      BusinessShortCode: MPESA_BUSINESS_SHORTCODE,
+      Password: password,
+      Timestamp: timestamp,
+      TransactionType: "CustomerPayBillOnline",
+      Amount: amount,
+      PartyA: phone,
+      PartyB: MPESA_BUSINESS_SHORTCODE,
+      PhoneNumber: phone,
+      CallBackURL: MPESA_CALLBACK_URL,
+      AccountReference: packageDescription,
+      TransactionDesc: `Payment for ${packageDescription} via Raynger Hotspot Services`,
     };
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/process_payment`, {
+    console.log("STK Push Payload:", JSON.stringify(stkPushPayload, null, 2));
+
+    const stkPushResponse = await fetch(
+      `${MPESA_API_BASE_URL}/mpesa/stkpush/v1/processrequest`,
+      {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json", // Indicate that we prefer JSON response
+          Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json(); // Always attempt to parse JSON
-
-      if (response.ok) {
-        // Check for HTTP 2xx status codes
-        console.log("Payment initiated successfully:", result);
-        displayUserMessage(
-          result.customerMessage ||
-            result.message ||
-            "Payment request sent! Please check your phone for the M-Pesa prompt.",
-          "success"
-        );
-        // Auto-hide the success message after a few seconds, as the user needs to act on their phone
-        setTimeout(resetUI, 7000); // Give user time to see the message and get the prompt
-      } else {
-        // Server responded with an error (e.g., 400, 500)
-        console.error("Server error during payment initiation:", result);
-        const errorMessage =
-          result.message ||
-          "An unexpected error occurred during payment. Please try again or contact support.";
-        displayUserMessage("Payment failed: " + errorMessage, "error");
+        body: JSON.stringify(stkPushPayload),
       }
-    } catch (error) {
-      // Network errors (e.g., server down, no internet)
-      console.error(
-        "Network or parsing error during payment initiation:",
-        error
-      );
-      displayUserMessage(
-        "Could not connect to the payment service. Please check your internet connection or try again later.",
-        "error"
-      );
-    } finally {
-      // Button state is managed by displayUserMessage -> resetUI,
-      // which will re-enable the button when any message popup is closed.
-    }
-  }
-
-  /**
-   * Handles submission of the comments form.
-   * NOTE: This will require a separate backend endpoint to process and store comments.
-   * Currently, this just logs to console for the CDN demo.
-   * @param {Event} event - The form submission event.
-   */
-  async function handleCommentsSubmission(event) {
-    event.preventDefault(); // Prevent default form submission
-
-    const formData = new FormData(commentsForm);
-    const commentsData = {};
-    for (let [key, value] of formData.entries()) {
-      commentsData[key] = value;
-    }
-
-    console.log("Comments Form Submitted:", commentsData);
-    // In a real application, you'd send this to your backend, e.g.:
-    /*
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/comments`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(commentsData)
-                    });
-                    if (response.ok) {
-                        alert("Thank you for your comments!");
-                        commentsForm.reset();
-                    } else {
-                        const errorData = await response.json();
-                        alert(`Failed to submit comments: ${errorData.message || 'Unknown error'}`);
-                    }
-                } catch (error) {
-                    console.error("Error submitting comments:", error);
-                    alert("Network error: Could not submit comments.");
-                }
-                */
-    alert(
-      "Thank you for your comments! (This is a demo, comments are logged to console.)"
     );
-    commentsForm.reset(); // Clear the form after submission
-  }
 
-  // --- 3. Event Listeners ---
+    const stkPushData = await stkPushResponse.json();
+    console.log("M-Pesa STK Push Response:", stkPushData);
 
-  // Attach click listeners to all subscribe buttons
-  subscribeButtons.forEach((button) => {
-    button.addEventListener("click", showPaymentPopupHandler);
-  });
+    if (stkPushData.ResponseCode === "0") {
+      const newPayment = new Payment({
+        MerchantRequestID: stkPushData.MerchantRequestID,
+        CheckoutRequestID: stkPushData.CheckoutRequestID,
+        status: "Processing",
+        Amount: amount,
+        PhoneNumber: phone,
+      });
+      await newPayment.save();
+      console.log("Initial payment request saved to MongoDB:", newPayment._id);
 
-  // Attach submit listener to the payment form
-  if (paymentForm) {
-    paymentForm.addEventListener("submit", handlePaymentSubmission);
-  }
+      res.status(200).json({
+        success: true,
+        message:
+          "Payment request sent successfully. Please complete the transaction on your phone.",
+        customerMessage:
+          stkPushData.CustomerMessage || "Awaiting user payment confirmation.",
+        checkoutRequestID: stkPushData.CheckoutRequestID,
+      });
+    } else {
+      const errorMessage =
+        stkPushData.CustomerMessage ||
+        stkPushData.ResponseDescription ||
+        stkPushData.errorMessage ||
+        "Unknown error from M-Pesa during STK push initiation.";
 
-  // Attach click listeners to close buttons for popups
-  if (closeButton) {
-    closeButton.addEventListener("click", resetUI);
-  }
-  if (closeErrorButton) {
-    closeErrorButton.addEventListener("click", resetUI);
-  }
-  if (closeSuccessButton) {
-    closeSuccessButton.addEventListener("click", resetUI);
-  }
-  // Close popups when clicking on the overlay itself
-  if (overlay) {
-    overlay.addEventListener("click", resetUI);
-  }
+      console.error("STK Push failed:", errorMessage, stkPushData);
 
-  // Attach submit listener to the comments form
-  if (commentsForm) {
-    commentsForm.addEventListener("submit", handleCommentsSubmission);
+      const failedPayment = new Payment({
+        MerchantRequestID:
+          stkPushData.MerchantRequestID || `Failed-${Date.now()}`,
+        CheckoutRequestID:
+          stkPushData.CheckoutRequestID || `Failed-${Date.now()}`,
+        status: "Failed",
+        Amount: amount,
+        PhoneNumber: phone,
+        ResultCode: stkPushData.ResponseCode,
+        ResultDesc: errorMessage,
+        RawCallbackData: stkPushData,
+      });
+      await failedPayment
+        .save()
+        .catch((dbErr) =>
+          console.error("Failed to save failed payment attempt:", dbErr)
+        );
+
+      throw new APIError(
+        `Payment initiation failed: ${errorMessage}`,
+        400,
+        process.env.NODE_ENV !== "production" ? stkPushData : undefined
+      );
+    }
+  } catch (error) {
+    next(error);
   }
 });
+
+// M-Pesa Callback URL
+app.post("/api/mpesa_callback", async (req, res) => {
+  const callbackData = req.body;
+  console.log(
+    "M-Pesa Callback received:",
+    JSON.stringify(callbackData, null, 2)
+  );
+
+  res.status(200).json({ MpesaResponse: "Callback received" }); // NEW: Wrap processing logic in a function to make it cleaner
+
+  const processCallbackInBackground = async () => {
+    try {
+      if (!callbackData.Body || !callbackData.Body.stkCallback) {
+        console.error(
+          "Invalid M-Pesa callback format: Missing Body or stkCallback."
+        );
+        return;
+      }
+
+      const stkCallback = callbackData.Body.stkCallback;
+      const merchantRequestID = stkCallback.MerchantRequestID;
+      const checkoutRequestID = stkCallback.CheckoutRequestID;
+      const resultCode = stkCallback.ResultCode;
+      const resultDesc =
+        stkCallback.ResultDesc ||
+        (stkCallback.CallbackMetadata &&
+          stkCallback.CallbackMetadata.Item &&
+          stkCallback.CallbackMetadata.Item.find(
+            (item) => item.Name === "ResultDesc"
+          )?.Value) ||
+        "No specific description provided.";
+
+      const updateFields = {
+        ResultCode: resultCode,
+        ResultDesc: resultDesc,
+        RawCallbackData: callbackData,
+      };
+
+      if (resultCode === 0) {
+        updateFields.status = "Completed";
+        const callbackMetadata = stkCallback.CallbackMetadata;
+        if (callbackMetadata && callbackMetadata.Item) {
+          callbackMetadata.Item.forEach((item) => {
+            if (item.Name === "Amount") updateFields.Amount = item.Value;
+            if (item.Name === "MpesaReceiptNumber")
+              updateFields.MpesaReceiptNumber = item.Value;
+            if (item.Name === "TransactionDate") {
+              const dateString = item.Value;
+              if (dateString && dateString.length === 14) {
+                const year = dateString.substring(0, 4);
+                const month = dateString.substring(4, 6) - 1;
+                const day = dateString.substring(6, 8);
+                const hour = dateString.substring(8, 10);
+                const minute = dateString.substring(10, 12);
+                const second = dateString.substring(12, 14);
+                updateFields.TransactionDate = new Date(
+                  Date.UTC(year, month, day, hour, minute, second)
+                );
+              }
+            }
+            if (item.Name === "PhoneNumber")
+              updateFields.PhoneNumber = item.Value;
+          });
+        }
+      } else {
+        updateFields.status = resultCode === 1032 ? "Cancelled" : "Failed";
+      }
+      const query = {
+        $or: [
+          { CheckoutRequestID: checkoutRequestID },
+          { MerchantRequestID: merchantRequestID },
+        ],
+      };
+      const updatedPayment = await Payment.findOneAndUpdate(
+        query,
+        { $set: updateFields },
+        { new: true, upsert: true, runValidators: true }
+      );
+      if (updatedPayment) {
+        console.log(
+          `Payment record updated/created for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
+        );
+        if (updatedPayment.status === "Completed") {
+          console.log(
+            `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
+          ); // YOUR SERVICE FULFILLMENT LOGIC GOES HERE
+        }
+      } else {
+        console.warn(
+          `[DB Issue] findOneAndUpdate did not return a document for CheckoutRequestID ${checkoutRequestID}.`
+        );
+      }
+    } catch (error) {
+      console.error(
+        "CRITICAL: Error processing M-Pesa callback (async background job):",
+        error
+      );
+    }
+  };
+  setImmediate(processCallbackInBackground);
+});
+
+// Endpoint to retrieve all payments (for testing/admin purposes)
+app.get("/api/payments", async (req, res, next) => {
+  // NEW: IMPORTANT - This endpoint is a major security risk if exposed in production.
+  // Ensure you have strong authorization logic here.
+  // For local testing, you might leave it open, but for deployment, it MUST be locked down.
+  if (process.env.NODE_ENV === "production" && !req.headers.authorization) {
+    return next(new APIError("Authentication required.", 401));
+  } // You can add more robust auth here (e.g., JWT, API Key)
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      sort = "createdAt",
+      order = -1,
+    } = req.query;
+    const query = status ? { status } : {};
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOrder = parseInt(order);
+
+    const payments = await Payment.find(query)
+      .sort({ [sort]: sortOrder })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const totalPayments = await Payment.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: payments,
+      meta: {
+        total: totalPayments,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(totalPayments / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching payments:", error);
+    next(error);
+  }
+});
+
+// Basic comments endpoint
+app.post("/api/comments", (req, res, next) => {
+  try {
+    const { firstName, secondName, phone, email, commentsText } = req.body;
+    console.log("Received new comment:", {
+      firstName,
+      secondName,
+      phone,
+      email,
+      commentsText,
+    });
+    res
+      .status(200)
+      .json({ success: true, message: "Comment received successfully!" });
+  } catch (error) {
+    next(new APIError("Failed to process comment.", 500, error));
+  }
+});
+
+// --- Centralized Error Handling Middleware (MUST be the last middleware) ---
+app.use((err, req, res, next) => {
+  const logLevel = err.statusCode && err.statusCode < 500 ? "warn" : "error";
+  if (process.env.NODE_ENV !== "production") {
+    console[logLevel]("Unhandled Server Error (DEV):", err.stack || err);
+  } else {
+    console[logLevel]("Unhandled Server Error (PROD):", err.message, {
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+    });
+  }
+  let statusCode = 500;
+  let message = "An internal server error occurred. Please try again later.";
+  let errorDetails = undefined;
+  if (err instanceof APIError) {
+    statusCode = err.statusCode;
+    message = err.message;
+    if (process.env.NODE_ENV !== "production") {
+      errorDetails = err.details;
+    }
+  } else if (err.name === "ValidationError" && err.errors) {
+    statusCode = 400;
+    message = "Data validation failed.";
+    errorDetails = Object.values(err.errors).map((val) => val.message);
+  } else if (err.name === "CastError" && err.path) {
+    statusCode = 400;
+    message = `Invalid format for ${err.path}.`;
+  }
+  res.status(statusCode).json({
+    success: false,
+    message: message,
+    error: errorDetails,
+  });
+});
+
+// --- Start Server ---
+const server = app.listen(PORT, () => {
+  console.log(`[SERVER] Server is running on http://localhost:${PORT}`);
+  console.log(`[SERVER] Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`[SERVER] M-Pesa Callback endpoint: ${MPESA_CALLBACK_URL}`);
+  console.log(`[SERVER] M-Pesa API Base URL: ${MPESA_API_BASE_URL}`);
+});
+
+// --- Graceful Server Shutdown ---
+const shutdown = () => {
+  console.log("Server is initiating graceful shutdown...");
+  server.close(() => {
+    console.log("HTTP server closed.");
+    mongoose
+      .disconnect()
+      .then(() => {
+        console.log("MongoDB connection closed.");
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.error("Error closing MongoDB connection:", err);
+        process.exit(1);
+      });
+  });
+  setTimeout(() => {
+    console.error("Forcing server shutdown due to timeout.");
+    process.exit(1);
+  }, 10000);
+};
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
+// Catch unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("UNHANDLED REJECTION:", reason.message || reason);
+});
+
+// Catch uncaught exceptions
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err.message, err.stack);
+  shutdown();
+});
+
+module.exports = app;
+// Ensure the API_BASE_URL is correct for your deployment
+// This should be the base URL for the M-Pesa API, e.g., "https://sandbox.safaricom.co.ke" for testing
+// or "https://api.safaricom.co.ke" for production.
+// Ensure the MONGODB_URI is set correctly in your .env file
+// This should point to your MongoDB instance, e.g., "mongodb://localhost:27017/yourdbname"
+// Ensure the MPESA_CALLBACK_URL is set correctly in your .env file
+// This should be the URL where M-Pesa will send payment notifications, e.g., "https://yourdomain.com/api/mpesa_callback"
+// Ensure the MPESA_PASSKEY, MPESA_CONSUMER_KEY, and MPESA_CONSUMER_SECRET are set correctly in your .env file
+// These should be your M-Pesa API credentials, which you can obtain from Safaricom's developer portal.
