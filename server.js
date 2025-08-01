@@ -10,7 +10,11 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const fetch = require("node-fetch");
 const nodemailer = require("nodemailer");
-const { Ssh2Promise } = require("ssh2-promise"); // Added SSH library
+// /*
+//  * Mikrotik SSH Integration: Commented out for later use
+//  * Uncomment this line to enable the SSH client.
+//  */
+// const { Ssh2Promise } = require('ssh2-promise');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,11 +44,14 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 const EMAIL_RECIPIENT = process.env.EMAIL_RECIPIENT;
 
-// --- Mikrotik SSH Configuration from Environment Variables ---
-const MIKROTIK_HOST = process.env.MIKROTIK_HOST;
-const MIKROTIK_PORT = process.env.MIKROTIK_PORT || 22;
-const MIKROTIK_USERNAME = process.env.MIKROTIK_USERNAME;
-const MIKROTIK_PASSWORD = process.env.MIKROTIK_PASSWORD;
+// /*
+//  * Mikrotik SSH Configuration: Commented out for later use
+//  * Uncomment this section and the related code to enable Mikrotik SSH login.
+//  */
+// const MIKROTIK_HOST = process.env.MIKROTIK_HOST;
+// const MIKROTIK_PORT = process.env.MIKROTIK_PORT || 22;
+// const MIKROTIK_USERNAME = process.env.MIKROTIK_USERNAME;
+// const MIKROTIK_PASSWORD = process.env.MIKROTIK_PASSWORD;
 
 // --- MongoDB Connection String (from .env) ---
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -59,11 +66,16 @@ const requiredEnvVars = [
   "MONGODB_URI",
   "EMAIL_USER",
   "EMAIL_PASS",
-  "EMAIL_RECIPIENT", // Added Mikrotik environment variables
-  "MIKROTIK_HOST",
-  "MIKROTIK_USERNAME",
-  "MIKROTIK_PASSWORD",
+  "EMAIL_RECIPIENT",
 ];
+
+// /*
+//  * Mikrotik SSH Environment Variable Check: Commented out for later use
+//  * Uncomment this section to make Mikrotik variables mandatory.
+//  */
+// "MIKROTIK_HOST",
+// "MIKROTIK_USERNAME",
+// "MIKROTIK_PASSWORD",
 
 const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
 if (missingEnvVars.length > 0) {
@@ -110,9 +122,11 @@ const paymentSchema = new mongoose.Schema(
     },
     TransactionDate: { type: Date },
     PhoneNumber: { type: String },
-    packageDescription: { type: String }, // ADDED: New field to store the user's MAC address
-    macAddress: { type: String, default: null },
-    status: {
+    packageDescription: { type: String }, // macAddress: { type: String, default: null },
+    /*
+     * macAddress Field: Commented out for later use
+     * Uncomment this field when you implement the Mikrotik login.
+     */ status: {
       type: String,
       default: "Pending",
       enum: [
@@ -177,55 +191,55 @@ const transporter = nodemailer.createTransport({
   auth: { user: EMAIL_USER, pass: EMAIL_PASS },
 });
 
-// --- Mikrotik SSH Client Setup ---
-const sshConfig = {
-  host: MIKROTIK_HOST,
-  port: parseInt(MIKROTIK_PORT),
-  username: MIKROTIK_USERNAME,
-  password: MIKROTIK_PASSWORD,
-};
-const ssh = new Ssh2Promise(sshConfig);
+// /*
+//  * Mikrotik SSH Client Setup and Helper Functions: Commented out for later use
+//  * This section contains the logic for connecting to the Mikrotik router via SSH.
+//  */
+// const sshConfig = {
+//     host: MIKROTIK_HOST,
+//     port: parseInt(MIKROTIK_PORT),
+//     username: MIKROTIK_USERNAME,
+//     password: MIKROTIK_PASSWORD,
+// };
+// const ssh = new Ssh2Promise(sshConfig);
 
-/**
- * Creates a Mikrotik hotspot user with a specific profile.
- * @param {string} username - The username (e.g., phone number).
- * @param {string} macAddress - The user's MAC address.
- * @param {string} profile - The Mikrotik profile name (e.g., a package name).
- * @returns {Promise<boolean>} True if user was added, false otherwise.
- */
-async function addMikrotikUser(username, macAddress, profile) {
-  try {
-    await ssh.connect();
-    const command = `/ip hotspot user add name="${username}" mac-address="${macAddress}" profile="${profile}" limit-uptime="${getDurationFromProfile(
-      profile
-    )}"`;
-    const result = await ssh.exec(command);
-    console.log(`[Mikrotik] User added: ${username} with profile ${profile}.`);
-    return true;
-  } catch (error) {
-    console.error(`[Mikrotik] Failed to add user ${username}:`, error.message);
-    return false;
-  } finally {
-    if (ssh.conn && ssh.conn.connected) {
-      ssh.close();
-    }
-  }
-}
+// /**
+//  * Creates a Mikrotik hotspot user with a specific profile.
+//  * @param {string} username - The username (e.g., phone number).
+//  * @param {string} macAddress - The user's MAC address.
+//  * @param {string} profile - The Mikrotik profile name (e.g., a package name).
+//  * @returns {Promise<boolean>} True if user was added, false otherwise.
+//  */
+// async function addMikrotikUser(username, macAddress, profile) {
+//     try {
+//         await ssh.connect();
+//         const command = `/ip hotspot user add name="${username}" mac-address="${macAddress}" profile="${profile}" limit-uptime="${getDurationFromProfile(profile)}"`;
+//         const result = await ssh.exec(command);
+//         console.log(`[Mikrotik] User added: ${username} with profile ${profile}.`);
+//         return true;
+//     } catch (error) {
+//         console.error(`[Mikrotik] Failed to add user ${username}:`, error.message);
+//         return false;
+//     } finally {
+//         if (ssh.conn && ssh.conn.connected) {
+//             ssh.close();
+//         }
+//     }
+// }
 
-function getDurationFromProfile(profile) {
-  if (profile.includes("3-Hour")) return "3h";
-  if (profile.includes("7-Hour")) return "7h";
-  if (profile.includes("14-Hour")) return "14h";
-  if (profile.includes("24-Hour")) return "24h";
-  if (profile.toLowerCase().includes("unlimited")) return "24h";
-  return "1h"; // Default to 1 hour
-}
+// function getDurationFromProfile(profile) {
+//     if (profile.includes("3-Hour")) return "3h";
+//     if (profile.includes("7-Hour")) return "7h";
+//     if (profile.includes("14-Hour")) return "14h";
+//     if (profile.includes("24-Hour")) return "24h";
+//     if (profile.toLowerCase().includes("unlimited")) return "24h";
+//     return "1h"; // Default to 1 hour
+// }
 
 // --- API Routes ---
 
 // M-Pesa Payment Initiation API Endpoint
 app.post("/api/process_payment", async (req, res, next) => {
-  // Your existing M-Pesa payment initiation logic
   try {
     let { amount, phone, packageDescription } = req.body;
     if (!amount || !phone || !packageDescription) {
@@ -312,7 +326,6 @@ app.post("/api/process_payment", async (req, res, next) => {
     const stkPushData = await stkPushResponse.json();
 
     if (stkPushData.ResponseCode === "0") {
-      // Only save if STK push was accepted (not payment success yet)
       const newPayment = new Payment({
         MerchantRequestID: stkPushData.MerchantRequestID,
         CheckoutRequestID: stkPushData.CheckoutRequestID,
@@ -332,7 +345,6 @@ app.post("/api/process_payment", async (req, res, next) => {
         checkoutRequestID: stkPushData.CheckoutRequestID,
       });
     } else {
-      // Do NOT save failed payment attempts
       const errorMessage =
         stkPushData.CustomerMessage ||
         stkPushData.ResponseDescription ||
@@ -349,10 +361,10 @@ app.post("/api/process_payment", async (req, res, next) => {
   }
 });
 
-// M-Pesa Callback URL - Only update if payment was successful
+// M-Pesa Callback URL
 app.post("/api/mpesa_callback", async (req, res) => {
   const callbackData = req.body;
-  res.status(200).json({ MpesaResponse: "Callback received" }); // Your existing M-Pesa callback logic
+  res.status(200).json({ MpesaResponse: "Callback received" });
   setImmediate(async () => {
     try {
       if (!callbackData.Body || !callbackData.Body.stkCallback) {
@@ -367,7 +379,6 @@ app.post("/api/mpesa_callback", async (req, res) => {
       const resultCode = stkCallback.ResultCode;
 
       if (resultCode === 0) {
-        // Only update if payment was successful
         const updateFields = {
           ResultCode: resultCode,
           ResultDesc:
@@ -399,7 +410,7 @@ app.post("/api/mpesa_callback", async (req, res) => {
             if (item.Name === "PhoneNumber")
               updateFields.PhoneNumber = item.Value;
           });
-        } // Set expiresAt based on plan
+        }
         let durationHours = 1;
         const desc = updateFields.packageDescription || "";
         if (desc.includes("3-Hour")) durationHours = 3;
@@ -439,7 +450,6 @@ app.post("/api/mpesa_callback", async (req, res) => {
           );
         }
       } else {
-        // Do NOT update or create payment for failed/cancelled payments
         console.log(
           `Payment not successful for CheckoutRequestID ${checkoutRequestID}. ResultCode: ${resultCode}`
         );
@@ -457,7 +467,6 @@ app.post("/api/mpesa_callback", async (req, res) => {
 app.get(
   "/api/check_payment_status/:checkoutRequestID",
   async (req, res, next) => {
-    // Your existing payment status check logic
     try {
       const { checkoutRequestID } = req.params;
       if (!checkoutRequestID)
@@ -498,54 +507,41 @@ app.get(
   }
 );
 
-// ADDED: Endpoint for frontend to trigger Mikrotik login after payment success
-app.post("/api/mikrotik_auth", async (req, res, next) => {
-  try {
-    const { phoneNumber, macAddress, package } = req.body;
-    if (!phoneNumber || !macAddress || !package) {
-      throw new APIError(
-        "Missing required parameters: phoneNumber, macAddress, or package.",
-        400
-      );
-    }
+// /*
+//  * Mikrotik Authentication Endpoint: Commented out for later use
+//  * This endpoint is called by the frontend to trigger a Mikrotik user creation/login.
+//  * Uncomment this section when the SSH functionality is ready.
+//  */
+// app.post("/api/mikrotik_auth", async (req, res, next) => {
+//     try {
+//         const { phoneNumber, macAddress, package } = req.body;
+//         if (!phoneNumber || !macAddress || !package) {
+//             throw new APIError("Missing required parameters: phoneNumber, macAddress, or package.", 400);
+//         }
 
-    // Find the most recent successful payment for this user/package
-    const payment = await Payment.findOne({
-      PhoneNumber: phoneNumber,
-      packageDescription: package,
-      status: "Completed",
-    }).sort({ createdAt: -1 });
+//         const payment = await Payment.findOne({
+//             PhoneNumber: phoneNumber,
+//             packageDescription: package,
+//             status: "Completed",
+//         }).sort({ createdAt: -1 });
 
-    if (!payment) {
-      throw new APIError(
-        "No completed payment found for this user/package combination.",
-        404
-      );
-    }
-
-    // Add the user to Mikrotik via SSH
-    const success = await addMikrotikUser(phoneNumber, macAddress, package);
-
-    if (success) {
-      // Update the payment record with the MAC address after successful Mikrotik login
-      await Payment.findByIdAndUpdate(payment._id, { $set: { macAddress } });
-      res
-        .status(200)
-        .json({ success: true, message: "User authenticated on Mikrotik." });
-    } else {
-      throw new APIError(
-        "Failed to authenticate user on Mikrotik. Check router logs.",
-        500
-      );
-    }
-  } catch (error) {
-    next(error);
-  }
-});
+//         if (!payment) {
+//             throw new APIError("No completed payment found for this user/package combination.", 404);
+//         }
+//         const success = await addMikrotikUser(phoneNumber, macAddress, package);
+//         if (success) {
+//             await Payment.findByIdAndUpdate(payment._id, { $set: { macAddress } });
+//             res.status(200).json({ success: true, message: "User authenticated on Mikrotik." });
+//         } else {
+//             throw new APIError("Failed to authenticate user on Mikrotik. Check router logs.", 500);
+//         }
+//     } catch (error) {
+//         next(error);
+//     }
+// });
 
 // Endpoint to retrieve all payments (SECURE THIS!)
 app.get("/api/payments", async (req, res, next) => {
-  // Your existing payments endpoint logic
   if (
     process.env.NODE_ENV === "production" &&
     (!req.headers.authorization ||
@@ -589,7 +585,6 @@ app.get("/api/payments", async (req, res, next) => {
 
 // Endpoint to receive comments and send an email
 app.post("/api/submit_comment", async (req, res, next) => {
-  // Your existing comments endpoint logic
   try {
     const { firstName, secondName, phone, email, commentsText } = req.body;
     if (!commentsText) {
@@ -632,7 +627,6 @@ app.post("/api/submit_comment", async (req, res, next) => {
 
 // --- Centralized Error Handling Middleware ---
 app.use((err, req, res, next) => {
-  // Your existing error handling logic
   const logLevel = err.statusCode && err.statusCode < 500 ? "warn" : "error";
   if (process.env.NODE_ENV !== "production") {
     console[logLevel]("Unhandled Server Error (DEV):", err.stack || err);
@@ -672,7 +666,6 @@ app.use((err, req, res, next) => {
 
 // MikroTik API: Check if a phone number has a valid, unexpired payment
 app.get("/api/mikrotik/check_payment", async (req, res, next) => {
-  // Your existing Mikrotik check payment logic
   try {
     const { phone } = req.query;
     if (!phone) {
@@ -685,14 +678,13 @@ app.get("/api/mikrotik/check_payment", async (req, res, next) => {
       return res
         .status(400)
         .json({ success: false, message: "Invalid phone number format." });
-    } // Find the most recent successful payment
+    }
     const payment = await Payment.findOne({
       PhoneNumber: normalizedPhone,
       status: "Completed",
     }).sort({ createdAt: -1 });
 
     if (payment) {
-      // Calculate expiry based on plan (example logic)
       let durationHours = 1;
       if (payment.packageDescription.includes("3-Hour")) durationHours = 3;
       else if (payment.packageDescription.includes("7-Hour")) durationHours = 7;
@@ -701,14 +693,14 @@ app.get("/api/mikrotik/check_payment", async (req, res, next) => {
       else if (payment.packageDescription.includes("24-Hour"))
         durationHours = 24;
       if (payment.packageDescription.toLowerCase().includes("unlimited"))
-        durationHours = 24; // Use expiresAt from DB if available, otherwise calculate
+        durationHours = 24;
 
       let expiresAt = payment.expiresAt
         ? new Date(payment.expiresAt)
         : new Date(
             payment.createdAt.getTime() + durationHours * 60 * 60 * 1000
           );
-      const now = new Date(); // Bandwidth logic: determine speed profile
+      const now = new Date();
 
       let bandwidth = "default";
       if (payment.packageDescription.toLowerCase().includes("unlimited")) {
