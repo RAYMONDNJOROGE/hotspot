@@ -2,18 +2,8 @@
 // IMPORTANT: In production, this should be your actual deployed backend URL
 const API_BASE_URL = "https://hotspot-gved.onrender.com";
 
-// Show MAC address if present in URL
-document.addEventListener("DOMContentLoaded", function () {
-  const urlParams = new URLSearchParams(window.location.search);
-  const mac = urlParams.get("mac");
-  if (mac) {
-    document.getElementById("mac-address").textContent = mac;
-    document.getElementById("mac-container").classList.remove("hidden");
-  }
-});
-
 document.addEventListener("DOMContentLoaded", () => {
-  // --- 1. DOM Element Caching ---
+  // --- 1. DOM Element Caching & Initial State ---
   const overlay = document.getElementById("overlay");
   const paymentPopup = document.getElementById("paymentPopup");
   const errorPopup = document.getElementById("errorPopup");
@@ -38,8 +28,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const commentsSubmitButton = commentsForm.querySelector(
     'button[type="submit"]'
   );
-  const resetCommentsButton = document.getElementById("resetCommentsButton");
+  // Use the class selector for the reset button for consistency
+  const commentsResetButton = commentsForm.querySelector(".com-res");
   const commentsRequiredFields = commentsForm.querySelectorAll("[required]");
+
+  // The hidden Mikrotik login form elements
+  const mikrotikLoginForm = document.forms.sendin;
+  const mikrotikUsernameInput = document.getElementById("mikrotik_username");
+  const mikrotikPasswordInput = document.getElementById("mikrotik_password");
+
+  // Global variables for URL parameters and polling
+  let pollingInterval = null;
+  let macAddress = null;
+  let mikrotikLoginUrl = null;
+  let checkoutRequestID = null;
 
   // Dynamically set the current year in the footer
   const currentYearSpan = document.getElementById("currentYear");
@@ -47,10 +49,21 @@ document.addEventListener("DOMContentLoaded", () => {
     currentYearSpan.textContent = new Date().getFullYear();
   }
 
-  // Global variable to hold the polling timer
-  let pollingInterval = null;
+  // --- 2. Helper Functions for UI Management & Core Logic ---
 
-  // --- 2. Helper Functions for UI Management ---
+  /**
+   * Extracts URL parameters.
+   * @param {string} name - The name of the parameter.
+   * @returns {string} The decoded value of the parameter.
+   */
+  function getUrlParameter(name) {
+    name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+    const regex = new RegExp("[\\?&]" + name + "=([^&#]*)");
+    const results = regex.exec(location.search);
+    return results === null
+      ? ""
+      : decodeURIComponent(results[1].replace(/\+/g, " "));
+  }
 
   /**
    * Toggles the visibility of a given HTML element and the overlay.
@@ -59,13 +72,8 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function toggleVisibility(element, isVisible) {
     if (element) {
-      if (isVisible) {
-        element.classList.remove("hidden");
-        overlay.classList.remove("hidden");
-      } else {
-        element.classList.add("hidden");
-        overlay.classList.add("hidden");
-      }
+      element.classList.toggle("hidden", !isVisible);
+      overlay.classList.toggle("hidden", !isVisible);
     }
   }
 
@@ -82,22 +90,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (errorMessageElement) errorMessageElement.textContent = "";
     if (successMessageElement) successMessageElement.textContent = "";
 
+    // Reset all popup states
     if (successPopup) {
       const h2 = successPopup.querySelector("h2");
-      const button = successPopup.querySelector("#closeSuccessButton");
-      h2.textContent = "Processing...";
       h2.classList.remove("text-red-400", "text-green-400", "text-blue-400");
-      button.textContent = "OK";
-      button.classList.remove(
-        "bg-red-600",
-        "hover:bg-red-700",
-        "active:bg-red-800"
-      );
-      button.classList.add(
-        "bg-green-600",
-        "hover:bg-green-700",
-        "active:bg-green-800"
-      );
     }
 
     if (payButton) {
@@ -112,12 +108,10 @@ document.addEventListener("DOMContentLoaded", () => {
       commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
     }
 
-    // Clear validation styles on comments form fields
     commentsRequiredFields.forEach((field) => {
       field.classList.remove("border-red-500");
     });
 
-    // Stop polling if active
     if (pollingInterval) {
       clearInterval(pollingInterval);
       pollingInterval = null;
@@ -130,7 +124,6 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {'error' | 'success' | 'processing'} type - The type of message to display.
    */
   function displayUserMessage(message, type = "error") {
-    // Clear any active polling when a new message is shown
     if (pollingInterval) {
       clearInterval(pollingInterval);
       pollingInterval = null;
@@ -163,6 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
       targetHeading.textContent = "Error!";
       targetHeading.classList.add("text-red-400");
       targetButton.textContent = "OK";
+      // Set error button styles
       targetButton.classList.remove(
         "bg-green-600",
         "hover:bg-green-700",
@@ -207,14 +201,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx or 01xxxxxxxxx).
+   * Validates and normalizes a phone number.
    * @param {string} phone - The phone number string.
    * @returns {string|null} The normalized phone number (254XXXXXXXXX) or null if invalid.
    */
   function validateAndNormalizePhoneNumber(phone) {
     phone = String(phone).trim();
     const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
-
     if (!kenyanPhoneRegex.test(phone)) {
       return null;
     }
@@ -223,9 +216,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /**
    * Polls the backend for the payment status.
-   * @param {string} checkoutRequestID - The unique ID of the payment request.
    */
-  async function pollPaymentStatus(checkoutRequestID) {
+  async function pollPaymentStatus() {
+    if (!checkoutRequestID) return;
+
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/check_payment_status/${checkoutRequestID}`
@@ -236,20 +230,65 @@ document.addEventListener("DOMContentLoaded", () => {
       if (
         ["Completed", "Cancelled", "Failed", "Timeout"].includes(result.status)
       ) {
-        // Stop polling if a final status is received
         clearInterval(pollingInterval);
         pollingInterval = null;
 
-        // Display the final message to the user
-        const messageType = result.status === "Completed" ? "success" : "error";
-        displayUserMessage(result.message, messageType);
+        if (result.status === "Completed") {
+          displayUserMessage(
+            "Payment successful! Logging you in...",
+            "processing"
+          );
+          // Call the new Mikrotik login function
+          await mikrotikLogin();
+        } else {
+          displayUserMessage(`Payment failed: ${result.message}`, "error");
+        }
       }
     } catch (error) {
-      // Stop polling on network errors to prevent infinite loops
       clearInterval(pollingInterval);
       pollingInterval = null;
       displayUserMessage(
         "An error occurred while checking payment status. Please try again later.",
+        "error"
+      );
+    }
+  }
+
+  /**
+   * Logs the user into the Mikrotik router by submitting the hidden form.
+   */
+  async function mikrotikLogin() {
+    const phoneNumber = phoneNumberInput.value;
+    const selectedPlan = paymentForm.dataset.plan;
+
+    try {
+      const authResponse = await fetch(`${API_BASE_URL}/api/mikrotik_auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: phoneNumber,
+          macAddress: macAddress,
+          package: selectedPlan,
+        }),
+      });
+      const authResult = await authResponse.json();
+
+      if (authResult.success) {
+        // If backend authentication is successful, submit the Mikrotik form
+        mikrotikUsernameInput.value = phoneNumber;
+        mikrotikPasswordInput.value = "payment-user";
+        mikrotikLoginForm.action = mikrotikLoginUrl;
+        mikrotikLoginForm.submit();
+      } else {
+        displayUserMessage(
+          "Failed to log in. Please contact support.",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("Mikrotik login failed:", error);
+      displayUserMessage(
+        "An error occurred during login. Please contact support.",
         "error"
       );
     }
@@ -266,8 +305,9 @@ document.addEventListener("DOMContentLoaded", () => {
     payButton.textContent = "Processing...";
     payButton.classList.add("opacity-50", "cursor-not-allowed");
 
-    let phoneNumber = phoneNumberInput.value;
-    const normalizedPhone = validateAndNormalizePhoneNumber(phoneNumber);
+    const normalizedPhone = validateAndNormalizePhoneNumber(
+      phoneNumberInput.value
+    );
 
     if (!normalizedPhone) {
       displayUserMessage(
@@ -276,7 +316,6 @@ document.addEventListener("DOMContentLoaded", () => {
       );
       return;
     }
-    phoneNumber = normalizedPhone;
 
     const amount = paymentForm.dataset.amount;
     const packageDescription = paymentForm.dataset.plan;
@@ -296,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const data = {
       amount: parseFloat(amount),
-      phone: phoneNumber,
+      phone: normalizedPhone,
       packageDescription: packageDescription,
     };
 
@@ -309,19 +348,12 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         body: JSON.stringify(data),
       });
-
       const result = await response.json();
 
-      if (response.ok) {
-        // If the payment is initiated successfully, start polling
-        const checkoutRequestID = result.checkoutRequestID;
-        if (checkoutRequestID) {
-          // Poll every 3 seconds for the final status
-          pollingInterval = setInterval(
-            () => pollPaymentStatus(checkoutRequestID),
-            3000
-          );
-        }
+      if (response.ok && result.checkoutRequestID) {
+        checkoutRequestID = result.checkoutRequestID;
+        // Poll every 3 seconds for the final status
+        pollingInterval = setInterval(pollPaymentStatus, 3000);
       } else {
         const errorMessage =
           result.message ||
@@ -343,7 +375,6 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleCommentsSubmission(event) {
     event.preventDefault();
 
-    // Perform validation
     let allFilled = true;
     commentsRequiredFields.forEach((field) => {
       if (!field.value.trim()) {
@@ -375,9 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/submit_comment`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(commentsData),
       });
       const result = await response.json();
@@ -400,70 +429,76 @@ document.addEventListener("DOMContentLoaded", () => {
         "Network error: Could not submit comments. Please try again later.",
         "error"
       );
+    } finally {
+      // Restore button state regardless of success or failure
+      commentsSubmitButton.disabled = false;
+      commentsSubmitButton.textContent = "Submit";
+      commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
     }
   }
 
-  // --- 3. Event Listeners ---
+  // --- 3. Initial Setup & Event Listeners ---
+  function init() {
+    macAddress = getUrlParameter("mac");
+    mikrotikLoginUrl = getUrlParameter("link-login-only");
 
-  subscribeButtons.forEach((button) => {
-    button.addEventListener("click", showPaymentPopupHandler);
-  });
+    if (macAddress) {
+      document.getElementById("mac-address").textContent = macAddress;
+      document.getElementById("mac-container").classList.remove("hidden");
+    }
 
-  if (paymentForm) {
-    paymentForm.addEventListener("submit", handlePaymentSubmission);
-  }
+    subscribeButtons.forEach((button) => {
+      button.addEventListener("click", showPaymentPopupHandler);
+    });
 
-  if (closeButton) {
-    closeButton.addEventListener("click", resetUI);
-  }
-  if (closeErrorButton) {
-    closeErrorButton.addEventListener("click", resetUI);
-  }
-  if (closeSuccessButton) {
-    closeSuccessButton.addEventListener("click", resetUI);
-  }
-  if (overlay) {
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) {
+    if (paymentForm) {
+      paymentForm.addEventListener("submit", handlePaymentSubmission);
+    }
+
+    if (closeButton) {
+      closeButton.addEventListener("click", resetUI);
+    }
+    if (closeErrorButton) {
+      closeErrorButton.addEventListener("click", resetUI);
+    }
+    if (closeSuccessButton) {
+      closeSuccessButton.addEventListener("click", resetUI);
+    }
+    if (overlay) {
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) {
+          resetUI();
+        }
+      });
+    }
+
+    if (commentsForm) {
+      commentsForm.addEventListener("submit", handleCommentsSubmission);
+    }
+
+    if (commentsResetButton) {
+      commentsResetButton.addEventListener("click", () => {
+        commentsForm.reset();
         resetUI();
-      }
-    });
+      });
+    }
   }
 
-  // Main comments form event listener
-  if (commentsForm) {
-    commentsForm.addEventListener("submit", handleCommentsSubmission);
-  }
-
-  // --- Comments Form Reset and Validation Feedback ---
-  if (resetCommentsButton) {
-    resetCommentsButton.addEventListener("click", () => {
-      commentsForm.reset();
-      resetUI(); // Also resets any visible popups
-      displayUserMessage("Comments form has been reset.", "success");
-    });
-  }
+  // --- 4. Additional Enhancements ---
 
   // Real-time validation feedback on input
   commentsForm.addEventListener("input", (event) => {
     const target = event.target;
     if (target.matches("[required]")) {
-      if (target.value.trim()) {
-        target.classList.remove("border-red-500");
-      } else {
-        target.classList.add("border-red-500");
-      }
+      target.classList.toggle("border-red-500", !target.value.trim());
     }
   });
 
   // Toggle submit button state based on required fields
   commentsForm.addEventListener("input", () => {
-    let allFilled = true;
-    commentsRequiredFields.forEach((field) => {
-      if (!field.value.trim()) {
-        allFilled = false;
-      }
-    });
+    const allFilled = [...commentsRequiredFields].every((field) =>
+      field.value.trim()
+    );
 
     if (allFilled) {
       commentsSubmitButton.disabled = false;
@@ -476,9 +511,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Accessibility Enhancements ---
+  // Accessibility Enhancements (Focus State)
   document.addEventListener("focusin", (event) => {
-    // Check if the focused element is a form control or button
     const target = event.target;
     if (
       target.matches(
@@ -492,7 +526,6 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
   });
-
   document.addEventListener("focusout", (event) => {
     const target = event.target;
     target.classList.remove(
@@ -501,23 +534,21 @@ document.addEventListener("DOMContentLoaded", () => {
       "focus:ring-blue-400"
     );
   });
-});
-// --- 4. Additional Enhancements ---
-// Add a scroll-to-top button
-const scrollToTopButton = document.createElement("button");
-scrollToTopButton.textContent = "↑";
-scrollToTopButton.className =
-  "fixed bottom-4 right-4 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400";
-scrollToTopButton.style.display = "none"; // Initially hidden
-document.body.appendChild(scrollToTopButton);
 
-scrollToTopButton.addEventListener("click", () => {
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
-window.addEventListener("scroll", () => {
-  if (window.scrollY > 300) {
-    scrollToTopButton.style.display = "flex";
-  } else {
-    scrollToTopButton.style.display = "none";
-  }
+  // Scroll-to-top button
+  const scrollToTopButton = document.createElement("button");
+  scrollToTopButton.textContent = "↑";
+  scrollToTopButton.className =
+    "fixed bottom-4 right-4 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400";
+  scrollToTopButton.style.display = "none";
+  document.body.appendChild(scrollToTopButton);
+  window.addEventListener("scroll", () => {
+    scrollToTopButton.style.display = window.scrollY > 300 ? "flex" : "none";
+  });
+  scrollToTopButton.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  // Initialize the script
+  init();
 });
