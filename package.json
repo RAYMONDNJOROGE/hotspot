@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
@@ -20,5 +20,19 @@
     "morgan": "^1.10.1",
     "node-fetch": "^2.7.0",
     "sqlite3": "^5.1.7"
-  }
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RAYMONDNJOROGE/hotspot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RAYMONDNJOROGE/hotspot/issues"
+  },
+  "homepage": "https://github.com/RAYMONDNJOROGE/hotspot#readme",
+  "description": ""
 }

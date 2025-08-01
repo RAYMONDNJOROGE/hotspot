@@ -133,26 +133,20 @@ app.use(helmet());
 // IMPORTANT: Replace with your actual production frontend URL(s)
 const allowedOrigins =
   process.env.NODE_ENV === "production"
-    ? ["https://your-frontend-domain.onrender.com"] // Example: 'https://raynger-hotspot-frontend.onrender.com'
-    : [
-        "http://localhost:3000",
-        "http://127.0.0.1:5500",
-        "http://localhost:5500",
-      ]; // Common local dev servers, including live server
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, postman)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}.`;
-        return callback(new Error(msg), false);
-      }
-      return callback(null, true);
-    },
-  })
-);
+    ? ["https://hotspot-gved.onrender.com/"] // Example: 'https://raynger-hotspot-frontend.onrender.com'
+    : app.use(
+        cors({
+          origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps, curl, postman)
+            if (!origin) return callback(null, true);
+            if (allowedOrigins.indexOf(origin) === -1) {
+              const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}.`;
+              return callback(new Error(msg), false);
+            }
+            return callback(null, true);
+          },
+        })
+      );
 
 // Request Logging
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
@@ -183,8 +177,8 @@ function normalizePhoneNumber(phone) {
     phone = "254" + phone.substring(1);
   }
   // Handle cases like "7XXXXXXXX" assuming 254 prefix
-  else if (phone.length === 9 && phone.startsWith("7")) {
-    phone = "254" + phone;
+  else if (phone.length === 8 && phone.startsWith("01")) {
+    phone = "254" + phone.substring(1);
   }
 
   // Strict validation for Kenyan Safaricom mobile numbers (starting with 2547)
@@ -223,7 +217,7 @@ app.post("/api/process_payment", async (req, res, next) => {
     const normalizedPhone = normalizePhoneNumber(phone);
     if (!normalizedPhone) {
       throw new APIError(
-        "Invalid phone number format. Please use a valid Kenyan Safaricom mobile number (e.g., 07XXXXXXXX or 2547XXXXXXXX).",
+        "Invalid phone number format. Please use a valid Kenyan Safaricom mobile number (e.g., 07XXXXXXXX or 01XXXXXXXX).",
         400
       );
     }

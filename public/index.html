@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Raynger Hotspot Services</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/hover.css/2.3.1/css/hover-min.css">
     <style>
         /* Custom animations - Tailwind CDN doesn't process @keyframes directly */
         @keyframes fadeInDown {
@@ -454,7 +458,7 @@
             }
 
             /**
-             * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx, 01xxxxxxxxx, or 2547xxxxxxxxx, 2541xxxxxxxxx).
+             * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx, 01xxxxxxxxx)
              * @param {string} phone - The phone number string.
              * @returns {string|null} The normalized phone number (254XXXXXXXXX) or null if invalid.
              */
@@ -462,7 +466,7 @@
                 phone = String(phone).trim();
 
                 // Regex for Kenyan mobile numbers: starts with 07, 01, 2547, or 2541 followed by 8 digits.
-                const kenyanPhoneRegex = /^(0(1|7)\d{8}|254(1|7)\d{8})$/;
+                const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
 
                 if (!kenyanPhoneRegex.test(phone)) {
                     return null; // Invalid format
