@@ -288,7 +288,7 @@ app.post("/api/process_payment", async (req, res, next) => {
 });
 
 // --- M-Pesa Callback URL ---
-app.post("/api/mpesa_callback", async (req, res) => {
+app.post("/api/callback", async (req, res) => {
   // Log every callback attempt for debugging
   console.log("M-Pesa callback received at:", new Date().toISOString());
   console.log("Request headers:", req.headers);
