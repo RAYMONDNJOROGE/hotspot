@@ -1,5 +1,7 @@
 // Configuration: Set your backend API base URL here
-// IMPORTANT: In production, this should be your actual deployed backend URL (e.g., 'https://your-backend-app.onrender.com')
+// IMPORTANT: In production, this should be your actual deployed backend URL
+const API_BASE_URL = "https://hotspot-gved.onrender.com";
+
 document.addEventListener("DOMContentLoaded", () => {
   // Other JavaScript code...
 
@@ -9,13 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentYearSpan.textContent = new Date().getFullYear();
   }
 });
-const API_BASE_URL =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "hotspot-gved.onrender.com"
-    ? "https://hotspot-gved.onrender.com" // Local development
-    : "https://hotspot-gved.onrender.com"; // Production URL
-// Ensure the API_BASE_URL is correct for your deployment
-// Note: The API_BASE_URL should match the backend server's URL where your payment processing endpoint is hosted.
+
 document.addEventListener("DOMContentLoaded", () => {
   // --- 1. DOM Element Caching ---
   // Get references to all necessary HTML elements once
@@ -40,6 +36,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Comments form elements
   const commentsForm = document.getElementById("commentsForm");
+  const commentsSubmitButton = commentsForm.querySelector(
+    'button[type="submit"]'
+  );
 
   // --- 2. Helper Functions for UI Management ---
 
@@ -104,6 +103,12 @@ document.addEventListener("DOMContentLoaded", () => {
       payButton.textContent = "Pay";
       payButton.classList.remove("opacity-50", "cursor-not-allowed");
     }
+    // Re-enable the comments submit button
+    if (commentsSubmitButton) {
+      commentsSubmitButton.disabled = false;
+      commentsSubmitButton.textContent = "Submit";
+      commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
+    }
   }
 
   /**
@@ -142,7 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (type === "success") {
         targetHeading.classList.add("text-green-400"); // Green for success
-        targetHeading.textContent = "Payment Successful!";
+        targetHeading.textContent = "Success!";
         targetButton.textContent = "Done";
         targetButton.classList.add(
           "bg-green-600",
@@ -211,14 +216,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx, 01xxxxxxxxx)
+   * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx or 01xxxxxxxxx)
+   * and rejects numbers in the 254 format.
    * @param {string} phone - The phone number string.
    * @returns {string|null} The normalized phone number (254XXXXXXXXX) or null if invalid.
    */
   function validateAndNormalizePhoneNumber(phone) {
     phone = String(phone).trim();
 
-    // Regex for Kenyan mobile numbers: starts with 07, 01, 2547, or 2541 followed by 8 digits.
+    // Regex for Kenyan mobile numbers: starts with 07 or 01 followed by 8 digits.
+    // This now strictly rejects the 254 format.
     const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
 
     if (!kenyanPhoneRegex.test(phone)) {
@@ -229,7 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (phone.startsWith("0")) {
       return "254" + phone.substring(1);
     }
-    return phone; // Already in 254 format
+    return phone; // This line is now unreachable due to the regex, but kept for logical completeness.
   }
 
   /**
@@ -249,7 +256,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!normalizedPhone) {
       displayUserMessage(
-        "Invalid phone number. Please enter a valid Kenyan mobile number (e.g., 0712345678 or 0112345678).",
+        "Invalid phone number. Please enter a valid Kenyan mobile number starting with 07 or 01 (e.g., 0712345678 or 0112345678).",
         "error"
       );
       // Button re-enabled by displayUserMessage -> resetUI
@@ -331,12 +338,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /**
    * Handles submission of the comments form.
-   * NOTE: This will require a separate backend endpoint to process and store comments.
-   * Currently, this just logs to console for the CDN demo.
    * @param {Event} event - The form submission event.
    */
   async function handleCommentsSubmission(event) {
     event.preventDefault(); // Prevent default form submission
+
+    // Disable the submit button to prevent multiple clicks
+    commentsSubmitButton.disabled = true;
+    commentsSubmitButton.textContent = "Submitting...";
+    commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
 
     // Get form data
     const formData = new FormData(commentsForm);
@@ -356,18 +366,26 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
 
       if (response.ok) {
-        alert(result.message || "Thank you for your comments!");
+        displayUserMessage(
+          result.message ||
+            "Thank you for your comments! We'll get back to you soon.",
+          "success"
+        );
         commentsForm.reset();
       } else {
-        alert(
-          `Failed to submit comments: ${result.message || "Unknown error"}`
+        displayUserMessage(
+          `Failed to submit comments: ${result.message || "Unknown error"}`,
+          "error"
         );
       }
     } catch (error) {
       console.error("Error submitting comments:", error);
-      alert(
-        "Network error: Could not submit comments. Please try again later."
+      displayUserMessage(
+        "Network error: Could not submit comments. Please try again later.",
+        "error"
       );
+    } finally {
+      // Button state is reset by displayUserMessage -> resetUI
     }
   }
 
