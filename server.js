@@ -134,19 +134,21 @@ app.use(helmet());
 const allowedOrigins =
   process.env.NODE_ENV === "production"
     ? ["https://hotspot-gved.onrender.com/"] // Example: 'https://raynger-hotspot-frontend.onrender.com'
-    : app.use(
-        cors({
-          origin: (origin, callback) => {
-            // Allow requests with no origin (like mobile apps, curl, postman)
-            if (!origin) return callback(null, true);
-            if (allowedOrigins.indexOf(origin) === -1) {
-              const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}.`;
-              return callback(new Error(msg), false);
-            }
-            return callback(null, true);
-          },
-        })
-      );
+    : ["http://localhost:3000", "http://localhost:5173"]; // Local development URLs
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}.`;
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+  })
+);
 
 // Request Logging
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
