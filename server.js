@@ -134,7 +134,7 @@ app.use(helmet());
 const allowedOrigins =
   process.env.NODE_ENV === "production"
     ? ["https://hotspot-gved.onrender.com/"] // Example: 'https://raynger-hotspot-frontend.onrender.com'
-    : ["http://localhost:3000", "http://localhost:5173"]; // Local development URLs
+    : ["http://localhost:3000", "http://localhost:5500"]; // Common local dev servers, including live server
 
 app.use(
   cors({
