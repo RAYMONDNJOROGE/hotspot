@@ -687,13 +687,3 @@ process.on("uncaughtException", (err) => {
 });
 
 module.exports = app;
-// Export the app for testing purposes
-if (require.main === module) {
-  // Only start the server if this file is run directly
-  server.listen(PORT, () => {
-    console.log(`[SERVER] Server is running on http://localhost:${PORT}`);
-  });
-} else {
-  // If this file is imported, export the app for testing
-  module.exports = app;
-}
