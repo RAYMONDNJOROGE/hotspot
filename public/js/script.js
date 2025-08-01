@@ -2,6 +2,16 @@
 // IMPORTANT: In production, this should be your actual deployed backend URL
 const API_BASE_URL = "https://hotspot-gved.onrender.com";
 
+// Show MAC address if present in URL
+document.addEventListener("DOMContentLoaded", function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  const mac = urlParams.get("mac");
+  if (mac) {
+    document.getElementById("mac-address").textContent = mac;
+    document.getElementById("mac-container").classList.remove("hidden");
+  }
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   // --- 1. DOM Element Caching ---
   const overlay = document.getElementById("overlay");
