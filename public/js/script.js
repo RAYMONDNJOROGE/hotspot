@@ -12,8 +12,8 @@ document.addEventListener("DOMContentLoaded", () => {
 const API_BASE_URL =
   window.location.hostname === "localhost" ||
   window.location.hostname === "hotspot-gved.onrender.com"
-    ? "https://hotspot-gved.onrender.com/" // Local development
-    : "https://hotspot-gved.onrender.com/"; // Production URL
+    ? "https://hotspot-gved.onrender.com" // Local development
+    : "https://hotspot-gved.onrender.com"; // Production URL
 // Ensure the API_BASE_URL is correct for your deployment
 // Note: The API_BASE_URL should match the backend server's URL where your payment processing endpoint is hosted.
 document.addEventListener("DOMContentLoaded", () => {
@@ -338,39 +338,37 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleCommentsSubmission(event) {
     event.preventDefault(); // Prevent default form submission
 
+    // Get form data
     const formData = new FormData(commentsForm);
     const commentsData = {};
     for (let [key, value] of formData.entries()) {
       commentsData[key] = value;
     }
 
-    console.log("Comments Form Submitted:", commentsData);
-    // In a real application, you'd send this to your backend, e.g.:
-    /*
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/comments`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(commentsData)
-                    });
-                    if (response.ok) {
-                        alert("Thank you for your comments!");
-                        commentsForm.reset();
-                    } else {
-                        const errorData = await response.json();
-                        alert(`Failed to submit comments: ${errorData.message || 'Unknown error'}`);
-                    }
-                } catch (error) {
-                    console.error("Error submitting comments:", error);
-                    alert("Network error: Could not submit comments.");
-                }
-                */
-    alert(
-      "Thank you for your comments! (This is a demo, comments are logged to console.)"
-    );
-    commentsForm.reset(); // Clear the form after submission
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/submit_comment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(commentsData),
+      });
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(result.message || "Thank you for your comments!");
+        commentsForm.reset();
+      } else {
+        alert(
+          `Failed to submit comments: ${result.message || "Unknown error"}`
+        );
+      }
+    } catch (error) {
+      console.error("Error submitting comments:", error);
+      alert(
+        "Network error: Could not submit comments. Please try again later."
+      );
+    }
   }
 
   // --- 3. Event Listeners ---
@@ -405,3 +403,6 @@ document.addEventListener("DOMContentLoaded", () => {
     commentsForm.addEventListener("submit", handleCommentsSubmission);
   }
 });
+// Note: Ensure the API_BASE_URL is correct for your deployment
+// This script should be included in your HTML file after the DOM is fully loaded
+// to ensure all elements are available for manipulation.

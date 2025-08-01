@@ -9,6 +9,7 @@ const path = require("path");
 const helmet = require("helmet"); // Security headers
 const morgan = require("morgan"); // Request logging
 const fetch = require("node-fetch"); // For server-side HTTP requests
+const nodemailer = require("nodemailer"); // <--- NEW: Email sending library
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,11 @@ const MPESA_CALLBACK_URL = process.env.MPESA_CALLBACK_URL;
 const MPESA_API_BASE_URL =
   process.env.MPESA_API_BASE_URL || "https://sandbox.safaricom.co.ke"; // Default to sandbox
 
+// --- Email Service Configuration from Environment Variables ---
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
+const EMAIL_RECIPIENT = process.env.EMAIL_RECIPIENT;
+
 // --- MongoDB Connection String (from .env) ---
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -44,6 +50,9 @@ const requiredEnvVars = [
   "MPESA_PASSKEY",
   "MPESA_CALLBACK_URL",
   "MONGODB_URI",
+  "EMAIL_USER", // <--- NEW: Added for email functionality
+  "EMAIL_PASS", // <--- NEW: Added for email functionality
+  "EMAIL_RECIPIENT", // <--- NEW: Added for email functionality
 ];
 
 const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
@@ -132,8 +141,8 @@ app.use(helmet());
 // CORS Configuration - Restrict origins in production
 // IMPORTANT: Replace with your actual production frontend URL(s)
 const allowedOrigins =
-  process.env.NODE_ENV === production
-    ? ["https://hotspot-gved.onrender.com/"] // Example: 'https://raynger-hotspot-frontend.onrender.com'
+  process.env.NODE_ENV === "production" // Corrected: "production" should be a string
+    ? ["https://hotspot-gved.onrender.com"] // Corrected: Removed the trailing slash
     : ["http://localhost:3000", "http://localhost:5500"]; // Common local dev servers, including live server
 
 app.use(
@@ -190,6 +199,15 @@ function normalizePhoneNumber(phone) {
   }
   return null; // Invalid format
 }
+
+// <--- NEW: Nodemailer transporter setup (placed with other configurations) --->
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: EMAIL_USER,
+    pass: EMAIL_PASS,
+  },
+});
 
 // --- API Routes ---
 
@@ -508,7 +526,7 @@ app.get("/api/payments", async (req, res, next) => {
   // Simple API key validation for illustration (NOT recommended for production without HTTPS and proper token management)
   // const token = req.headers.authorization ? req.headers.authorization.split(' ')[1] : null;
   // if (process.env.NODE_ENV === "production" && token !== process.env.ADMIN_API_KEY) {
-  //     return next(new APIError("Unauthorized access.", 403));
+  //     return next(new APIError("Unauthorized access.", 403));
   // }
 
   try {
@@ -544,6 +562,55 @@ app.get("/api/payments", async (req, res, next) => {
   } catch (error) {
     console.error("Error fetching payments:", error);
     next(error); // Pass to error handling middleware
+  }
+});
+
+// <--- NEW: Endpoint to receive comments and send an email --->
+app.post("/api/submit_comment", async (req, res, next) => {
+  try {
+    const { firstName, secondName, phone, email, commentsText } = req.body;
+
+    // --- Input Validation & Sanitization ---
+    // In a production app, you'd add more thorough validation here
+    if (!commentsText) {
+      return next(new APIError("Comment text is required.", 400));
+    }
+
+    const mailOptions = {
+      from: EMAIL_USER,
+      to: EMAIL_RECIPIENT,
+      subject: `New Comment from Raynger Hotspot Services`,
+      html: `
+        <h2>New Comment Submission</h2>
+        <p><strong>First Name:</strong> ${firstName || "N/A"}</p>
+        <p><strong>Second Name:</strong> ${secondName || "N/A"}</p>
+        <p><strong>Phone:</strong> ${phone || "N/A"}</p>
+        <p><strong>E-mail:</strong> ${email || "N/A"}</p>
+        <p><strong>Comments:</strong><br>${
+          commentsText || "No comments provided."
+        }</p>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent: %s", info.messageId);
+
+    // Save the comment to a database if needed
+    // ... your logic here ...
+
+    res
+      .status(200)
+      .json({ success: true, message: "Comment submitted successfully!" });
+  } catch (error) {
+    console.error("Error sending email:", error);
+    // Use the custom error handler for consistency
+    next(
+      new APIError(
+        "Failed to send comment. Please try again later.",
+        500,
+        error
+      )
+    );
   }
 });
 
