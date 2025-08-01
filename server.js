@@ -132,7 +132,7 @@ app.use(helmet());
 // CORS Configuration - Restrict origins in production
 // IMPORTANT: Replace with your actual production frontend URL(s)
 const allowedOrigins =
-  process.env.NODE_ENV === "production"
+  process.env.NODE_ENV === production
     ? ["https://hotspot-gved.onrender.com/"] // Example: 'https://raynger-hotspot-frontend.onrender.com'
     : ["http://localhost:3000", "http://localhost:5500"]; // Common local dev servers, including live server
 
