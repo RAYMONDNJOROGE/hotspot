@@ -309,40 +309,51 @@ app.post("/api/callback", async (req, res) => {
       const merchantRequestID = stkCallback.MerchantRequestID;
       const checkoutRequestID = stkCallback.CheckoutRequestID;
       const resultCode = stkCallback.ResultCode;
+      const resultDesc =
+        stkCallback.ResultDesc || "No specific description provided.";
 
-      if (resultCode === 0) {
-        const updateFields = {
-          ResultCode: resultCode,
-          ResultDesc:
-            stkCallback.ResultDesc || "No specific description provided.",
-          RawCallbackData: callbackData,
-          status: "Completed",
-        };
+      // Default status mapping
+      let status = "Processing";
+      if (resultCode === 0) status = "Completed";
+      else if (resultCode === 1032) status = "Cancelled";
+      else if (resultCode === 1) status = "Failed";
+      else if (resultCode === 1037) status = "Timeout";
+      else status = "Failed"; // fallback for any other error
 
-        const callbackMetadata = stkCallback.CallbackMetadata;
-        if (callbackMetadata && callbackMetadata.Item) {
-          callbackMetadata.Item.forEach((item) => {
-            if (item.Name === "Amount") updateFields.Amount = item.Value;
-            if (item.Name === "MpesaReceiptNumber")
-              updateFields.MpesaReceiptNumber = item.Value;
-            if (item.Name === "TransactionDate") {
-              const dateString = item.Value;
-              if (dateString && dateString.length === 14) {
-                const year = dateString.substring(0, 4);
-                const month = dateString.substring(4, 6) - 1;
-                const day = dateString.substring(6, 8);
-                const hour = dateString.substring(8, 10);
-                const minute = dateString.substring(10, 12);
-                const second = dateString.substring(12, 14);
-                updateFields.TransactionDate = new Date(
-                  Date.UTC(year, month, day, hour, minute, second)
-                );
-              }
+      const updateFields = {
+        ResultCode: resultCode,
+        ResultDesc: resultDesc,
+        RawCallbackData: callbackData,
+        status: status,
+      };
+
+      const callbackMetadata = stkCallback.CallbackMetadata;
+      if (callbackMetadata && callbackMetadata.Item) {
+        callbackMetadata.Item.forEach((item) => {
+          if (item.Name === "Amount") updateFields.Amount = item.Value;
+          if (item.Name === "MpesaReceiptNumber")
+            updateFields.MpesaReceiptNumber = item.Value;
+          if (item.Name === "TransactionDate") {
+            const dateString = item.Value;
+            if (dateString && dateString.length === 14) {
+              const year = dateString.substring(0, 4);
+              const month = dateString.substring(4, 6) - 1;
+              const day = dateString.substring(6, 8);
+              const hour = dateString.substring(8, 10);
+              const minute = dateString.substring(10, 12);
+              const second = dateString.substring(12, 14);
+              updateFields.TransactionDate = new Date(
+                Date.UTC(year, month, day, hour, minute, second)
+              );
             }
-            if (item.Name === "PhoneNumber")
-              updateFields.PhoneNumber = item.Value;
-          });
-        }
+          }
+          if (item.Name === "PhoneNumber")
+            updateFields.PhoneNumber = item.Value;
+        });
+      }
+
+      // Set expiresAt only for successful payments
+      if (status === "Completed") {
         let durationHours = 1;
         const desc = updateFields.packageDescription || "";
         if (desc.includes("3-Hour")) durationHours = 3;
@@ -353,37 +364,33 @@ app.post("/api/callback", async (req, res) => {
         updateFields.expiresAt = new Date(
           Date.now() + durationHours * 60 * 60 * 1000
         );
+      }
 
-        const query = {
-          $or: [
-            { CheckoutRequestID: checkoutRequestID },
-            { MerchantRequestID: merchantRequestID },
-          ],
-        };
+      const query = {
+        $or: [
+          { CheckoutRequestID: checkoutRequestID },
+          { MerchantRequestID: merchantRequestID },
+        ],
+      };
 
-        const updatedPayment = await Payment.findOneAndUpdate(
-          query,
-          { $set: updateFields },
-          { new: true, upsert: false, runValidators: true }
+      const updatedPayment = await Payment.findOneAndUpdate(
+        query,
+        { $set: updateFields },
+        { new: true, upsert: false, runValidators: true }
+      );
+
+      if (updatedPayment) {
+        console.log(
+          `Payment record updated for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
         );
-
-        if (updatedPayment) {
+        if (updatedPayment.status === "Completed") {
           console.log(
-            `Payment record updated for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
-          );
-          if (updatedPayment.status === "Completed") {
-            console.log(
-              `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
-            );
-          }
-        } else {
-          console.warn(
-            `[DB Issue] No existing payment found for CheckoutRequestID ${checkoutRequestID}.`
+            `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
           );
         }
       } else {
-        console.log(
-          `Payment not successful for CheckoutRequestID ${checkoutRequestID}. ResultCode: ${resultCode}`
+        console.warn(
+          `[DB Issue] No existing payment found for CheckoutRequestID ${checkoutRequestID}.`
         );
       }
     } catch (error) {

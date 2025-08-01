@@ -1,5 +1,3 @@
-// Configuration: Set your backend API base URL here
-// IMPORTANT: In production, this should be your actual deployed backend URL
 const API_BASE_URL = "https://hotspot-gved.onrender.com";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -25,37 +23,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Comments form elements
   const commentsForm = document.getElementById("commentsForm");
-  const commentsSubmitButton = commentsForm.querySelector(
-    'button[type="submit"]'
-  );
-  // Use the class selector for the reset button for consistency
-  const commentsResetButton = commentsForm.querySelector(".com-res");
-  const commentsRequiredFields = commentsForm.querySelectorAll("[required]");
+  const commentsSubmitButton = commentsForm
+    ? commentsForm.querySelector('button[type="submit"]')
+    : null;
+  const commentsResetButton = commentsForm
+    ? commentsForm.querySelector(".com-res")
+    : null;
+  const commentsRequiredFields = commentsForm
+    ? commentsForm.querySelectorAll("[required]")
+    : [];
 
-  // The hidden Mikrotik login form elements
+  // Mikrotik login form elements
   const mikrotikLoginForm = document.forms.sendin;
   const mikrotikUsernameInput = document.getElementById("mikrotik_username");
   const mikrotikPasswordInput = document.getElementById("mikrotik_password");
 
-  // Global variables for URL parameters and polling
+  // Global variables
   let pollingInterval = null;
   let macAddress = null;
   let mikrotikLoginUrl = null;
   let checkoutRequestID = null;
 
-  // Dynamically set the current year in the footer
+  // Set current year in footer
   const currentYearSpan = document.getElementById("currentYear");
   if (currentYearSpan) {
     currentYearSpan.textContent = new Date().getFullYear();
   }
 
-  // --- 2. Helper Functions for UI Management & Core Logic ---
+  // --- 2. Helper Functions ---
 
-  /**
-   * Extracts URL parameters.
-   * @param {string} name - The name of the parameter.
-   * @returns {string} The decoded value of the parameter.
-   */
   function getUrlParameter(name) {
     name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
     const regex = new RegExp("[\\?&]" + name + "=([^&#]*)");
@@ -65,11 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
       : decodeURIComponent(results[1].replace(/\+/g, " "));
   }
 
-  /**
-   * Toggles the visibility of a given HTML element and the overlay.
-   * @param {HTMLElement} element - The DOM element to show or hide.
-   * @param {boolean} isVisible - True to show, false to hide.
-   */
   function toggleVisibility(element, isVisible) {
     if (element) {
       element.classList.toggle("hidden", !isVisible);
@@ -77,9 +68,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Resets the UI by hiding all popups and clearing inputs.
-   */
   function resetUI() {
     toggleVisibility(paymentPopup, false);
     toggleVisibility(errorPopup, false);
@@ -90,7 +78,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (errorMessageElement) errorMessageElement.textContent = "";
     if (successMessageElement) successMessageElement.textContent = "";
 
-    // Reset all popup states
     if (successPopup) {
       const h2 = successPopup.querySelector("h2");
       h2.classList.remove("text-red-400", "text-green-400", "text-blue-400");
@@ -118,11 +105,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Displays a user message in the dedicated message popup (error or success).
-   * @param {string} message - The message to display.
-   * @param {'error' | 'success' | 'processing'} type - The type of message to display.
-   */
   function displayUserMessage(message, type = "error") {
     if (pollingInterval) {
       clearInterval(pollingInterval);
@@ -156,7 +138,6 @@ document.addEventListener("DOMContentLoaded", () => {
       targetHeading.textContent = "Error!";
       targetHeading.classList.add("text-red-400");
       targetButton.textContent = "OK";
-      // Set error button styles
       targetButton.classList.remove(
         "bg-green-600",
         "hover:bg-green-700",
@@ -173,10 +154,6 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleVisibility(targetPopup, true);
   }
 
-  /**
-   * Handles the display of the payment popup when a subscribe button is clicked.
-   * @param {Event} event - The click event.
-   */
   function showPaymentPopupHandler(event) {
     const selectedAmount = event.target.dataset.price;
     const selectedPlan = event.target.dataset.plan;
@@ -200,11 +177,6 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleVisibility(paymentPopup, true);
   }
 
-  /**
-   * Validates and normalizes a phone number.
-   * @param {string} phone - The phone number string.
-   * @returns {string|null} The normalized phone number (254XXXXXXXXX) or null if invalid.
-   */
   function validateAndNormalizePhoneNumber(phone) {
     phone = String(phone).trim();
     const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
@@ -214,9 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return "254" + phone.substring(1);
   }
 
-  /**
-   * Polls the backend for the payment status.
-   */
+  // --- Payment Status Polling ---
   async function pollPaymentStatus() {
     if (!checkoutRequestID) return;
 
@@ -226,7 +196,6 @@ document.addEventListener("DOMContentLoaded", () => {
       );
       const result = await response.json();
 
-      // Check if the status is final (Completed, Cancelled, or Failed)
       if (
         ["Completed", "Cancelled", "Failed", "Timeout"].includes(result.status)
       ) {
@@ -235,13 +204,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (result.status === "Completed") {
           displayUserMessage(
-            "Payment successful! Logging you in...",
+            result.message || "Payment successful! Logging you in...",
             "processing"
           );
-          // Call the new Mikrotik login function
           await mikrotikLogin();
-        } else {
-          displayUserMessage(`Payment failed: ${result.message}`, "error");
+        } else if (result.status === "Cancelled") {
+          displayUserMessage(
+            result.message || "Payment was cancelled.",
+            "error"
+          );
+        } else if (result.status === "Failed") {
+          displayUserMessage(result.message || "Payment failed.", "error");
+        } else if (result.status === "Timeout") {
+          displayUserMessage(result.message || "Payment timed out.", "error");
         }
       }
     } catch (error) {
@@ -254,9 +229,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Logs the user into the Mikrotik router by submitting the hidden form.
-   */
+  // --- Mikrotik Login ---
   async function mikrotikLogin() {
     const phoneNumber = phoneNumberInput.value;
     const selectedPlan = paymentForm.dataset.plan;
@@ -274,7 +247,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const authResult = await authResponse.json();
 
       if (authResult.success) {
-        // If backend authentication is successful, submit the Mikrotik form
         mikrotikUsernameInput.value = phoneNumber;
         mikrotikPasswordInput.value = "payment-user";
         mikrotikLoginForm.action = mikrotikLoginUrl;
@@ -286,7 +258,6 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       }
     } catch (error) {
-      console.error("Mikrotik login failed:", error);
       displayUserMessage(
         "An error occurred during login. Please contact support.",
         "error"
@@ -294,10 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Handles the payment form submission (STK push initiation).
-   * @param {Event} event - The form submission event.
-   */
+  // --- Payment Form Submission ---
   async function handlePaymentSubmission(event) {
     event.preventDefault();
 
@@ -311,7 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!normalizedPhone) {
       displayUserMessage(
-        "Invalid phone number. Please enter a valid Kenyan mobile number starting with **07** or **01** (e.g., 0712345678).",
+        "Invalid phone number. Please enter a valid Kenyan mobile number starting with 07 or 01 (e.g., 0712345678).",
         "error"
       );
       return;
@@ -352,7 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (response.ok && result.checkoutRequestID) {
         checkoutRequestID = result.checkoutRequestID;
-        // Poll every 3 seconds for the final status
+        if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(pollPaymentStatus, 3000);
       } else {
         const errorMessage =
@@ -368,10 +336,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Handles submission of the comments form.
-   * @param {Event} event - The form submission event.
-   */
+  // --- Comments Form Submission ---
   async function handleCommentsSubmission(event) {
     event.preventDefault();
 
@@ -430,7 +395,6 @@ document.addEventListener("DOMContentLoaded", () => {
         "error"
       );
     } finally {
-      // Restore button state regardless of success or failure
       commentsSubmitButton.disabled = false;
       commentsSubmitButton.textContent = "Submit";
       commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
@@ -443,8 +407,12 @@ document.addEventListener("DOMContentLoaded", () => {
     mikrotikLoginUrl = getUrlParameter("link-login-only");
 
     if (macAddress) {
-      document.getElementById("mac-address").textContent = macAddress;
-      document.getElementById("mac-container").classList.remove("hidden");
+      const macContainer = document.getElementById("mac-container");
+      const macSpan = document.getElementById("mac-address");
+      if (macContainer && macSpan) {
+        macSpan.textContent = macAddress;
+        macContainer.classList.remove("hidden");
+      }
     }
 
     subscribeButtons.forEach((button) => {
@@ -486,32 +454,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- 4. Additional Enhancements ---
 
-  // Real-time validation feedback on input
-  commentsForm.addEventListener("input", (event) => {
-    const target = event.target;
-    if (target.matches("[required]")) {
-      target.classList.toggle("border-red-500", !target.value.trim());
-    }
-  });
+  if (commentsForm) {
+    commentsForm.addEventListener("input", (event) => {
+      const target = event.target;
+      if (target.matches("[required]")) {
+        target.classList.toggle("border-red-500", !target.value.trim());
+      }
+    });
 
-  // Toggle submit button state based on required fields
-  commentsForm.addEventListener("input", () => {
-    const allFilled = [...commentsRequiredFields].every((field) =>
-      field.value.trim()
-    );
+    commentsForm.addEventListener("input", () => {
+      const allFilled = [...commentsRequiredFields].every((field) =>
+        field.value.trim()
+      );
 
-    if (allFilled) {
-      commentsSubmitButton.disabled = false;
-      commentsSubmitButton.textContent = "Submit";
-      commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
-    } else {
-      commentsSubmitButton.disabled = true;
-      commentsSubmitButton.textContent = "Fill all fields";
-      commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
-    }
-  });
+      if (allFilled) {
+        commentsSubmitButton.disabled = false;
+        commentsSubmitButton.textContent = "Submit";
+        commentsSubmitButton.classList.remove(
+          "opacity-50",
+          "cursor-not-allowed"
+        );
+      } else {
+        commentsSubmitButton.disabled = true;
+        commentsSubmitButton.textContent = "Fill all fields";
+        commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
+      }
+    });
+  }
 
-  // Accessibility Enhancements (Focus State)
   document.addEventListener("focusin", (event) => {
     const target = event.target;
     if (
@@ -552,3 +522,4 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initialize the script
   init();
 });
+// --- 5. Error Handling for Missing Elements ---
