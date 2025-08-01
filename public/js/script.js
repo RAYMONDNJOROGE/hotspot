@@ -3,19 +3,8 @@
 const API_BASE_URL = "https://hotspot-gved.onrender.com";
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Other JavaScript code...
-
-  // Dynamically set the current year in the footer
-  const currentYearSpan = document.getElementById("currentYear");
-  if (currentYearSpan) {
-    currentYearSpan.textContent = new Date().getFullYear();
-  }
-});
-
-document.addEventListener("DOMContentLoaded", () => {
   // --- 1. DOM Element Caching ---
-  // Get references to all necessary HTML elements once
-  const overlay = document.getElementById("overlay"); // New overlay element
+  const overlay = document.getElementById("overlay");
   const paymentPopup = document.getElementById("paymentPopup");
   const errorPopup = document.getElementById("errorPopup");
   const successPopup = document.getElementById("successPopup");
@@ -25,20 +14,28 @@ document.addEventListener("DOMContentLoaded", () => {
   const planDetailsElement = document.getElementById("selectedPlanDetails");
   const subscribeButtons = document.querySelectorAll(".sub-button");
 
-  const closeButton = document.getElementById("closeButton"); // Close button for the main payment popup
-  const closeErrorButton = document.getElementById("closeErrorButton"); // Close button for the error popup
-  const closeSuccessButton = document.getElementById("closeSuccessButton"); // Close button for the success/processing popup
+  const closeButton = document.getElementById("closeButton");
+  const closeErrorButton = document.getElementById("closeErrorButton");
+  const closeSuccessButton = document.getElementById("closeSuccessButton");
 
-  const errorMessageElement = document.getElementById("errorMessage"); // Paragraph for displaying specific error messages
-  const successMessageElement = document.getElementById("successMessage"); // Paragraph for displaying success/processing messages
+  const errorMessageElement = document.getElementById("errorMessage");
+  const successMessageElement = document.getElementById("successMessage");
 
-  const payButton = document.getElementById("payButton"); // Reference to the Pay button
+  const payButton = document.getElementById("payButton");
 
   // Comments form elements
   const commentsForm = document.getElementById("commentsForm");
   const commentsSubmitButton = commentsForm.querySelector(
     'button[type="submit"]'
   );
+  const resetCommentsButton = document.getElementById("resetCommentsButton");
+  const commentsRequiredFields = commentsForm.querySelectorAll("[required]");
+
+  // Dynamically set the current year in the footer
+  const currentYearSpan = document.getElementById("currentYear");
+  if (currentYearSpan) {
+    currentYearSpan.textContent = new Date().getFullYear();
+  }
 
   // --- 2. Helper Functions for UI Management ---
 
@@ -66,49 +63,46 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleVisibility(paymentPopup, false);
     toggleVisibility(errorPopup, false);
     toggleVisibility(successPopup, false);
-    // The overlay's hidden state is managed by toggleVisibility, no need for redundant calls.
 
-    // Reset specific input fields and messages
-    if (phoneNumberInput) {
-      phoneNumberInput.value = "";
+    if (phoneNumberInput) phoneNumberInput.value = "";
+    if (planDetailsElement) planDetailsElement.textContent = "";
+    if (errorMessageElement) errorMessageElement.textContent = "";
+    if (successMessageElement) successMessageElement.textContent = "";
+
+    if (successPopup) {
+      const h2 = successPopup.querySelector("h2");
+      const button = successPopup.querySelector("#closeSuccessButton");
+      h2.textContent = "Processing...";
+      h2.classList.remove("text-red-400", "text-green-400", "text-blue-400");
+      button.textContent = "OK";
+      button.classList.remove(
+        "bg-red-600",
+        "hover:bg-red-700",
+        "active:bg-red-800"
+      );
+      button.classList.add(
+        "bg-green-600",
+        "hover:bg-green-700",
+        "active:bg-green-800"
+      );
     }
-    if (planDetailsElement) {
-      planDetailsElement.textContent = "";
-    }
-    if (errorMessageElement) {
-      errorMessageElement.textContent = ""; // Clear previous error messages
-    }
-    if (successMessageElement) {
-      successMessageElement.textContent = ""; // Clear previous success messages
-      successPopup.querySelector("h2").textContent = "Processing..."; // Reset heading
-      successPopup.querySelector("#closeSuccessButton").textContent = "OK"; // Reset button text
-      successPopup
-        .querySelector("#closeSuccessButton")
-        .classList.add(
-          "bg-green-600",
-          "hover:bg-green-700",
-          "active:bg-green-800"
-        );
-      successPopup
-        .querySelector("#closeSuccessButton")
-        .classList.remove(
-          "bg-red-600",
-          "hover:bg-red-700",
-          "active:bg-red-800"
-        );
-    }
-    // Re-enable the pay button if it was disabled
+
     if (payButton) {
       payButton.disabled = false;
       payButton.textContent = "Pay";
       payButton.classList.remove("opacity-50", "cursor-not-allowed");
     }
-    // Re-enable the comments submit button
+
     if (commentsSubmitButton) {
       commentsSubmitButton.disabled = false;
       commentsSubmitButton.textContent = "Submit";
       commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
     }
+
+    // Clear validation styles on comments form fields
+    commentsRequiredFields.forEach((field) => {
+      field.classList.remove("border-red-500");
+    });
   }
 
   /**
@@ -117,27 +111,9 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {'error' | 'success' | 'processing'} type - The type of message to display.
    */
   function displayUserMessage(message, type = "error") {
-    resetUI(); // Hide all other popups first
+    resetUI();
 
-    let targetPopup = errorPopup;
-    let targetMessageElement = errorMessageElement;
-    let targetHeading = errorPopup.querySelector("h2");
-    let targetButton = closeErrorButton;
-
-    // Reset heading colors for consistency before setting new ones
-    targetHeading.classList.remove(
-      "text-red-400",
-      "text-green-400",
-      "text-blue-400"
-    );
-    targetButton.classList.remove(
-      "bg-green-600",
-      "hover:bg-green-700",
-      "active:bg-green-800",
-      "bg-red-600",
-      "hover:bg-red-700",
-      "active:bg-red-800"
-    );
+    let targetPopup, targetMessageElement, targetHeading, targetButton;
 
     if (type === "success" || type === "processing") {
       targetPopup = successPopup;
@@ -146,30 +122,27 @@ document.addEventListener("DOMContentLoaded", () => {
       targetButton = closeSuccessButton;
 
       if (type === "success") {
-        targetHeading.classList.add("text-green-400"); // Green for success
         targetHeading.textContent = "Success!";
+        targetHeading.classList.add("text-green-400");
         targetButton.textContent = "Done";
-        targetButton.classList.add(
-          "bg-green-600",
-          "hover:bg-green-700",
-          "active:bg-green-800"
-        );
       } else {
-        // 'processing'
-        targetHeading.classList.add("text-blue-400"); // Blue for processing
         targetHeading.textContent = "Processing...";
+        targetHeading.classList.add("text-blue-400");
         targetButton.textContent = "OK";
-        targetButton.classList.add(
-          "bg-green-600",
-          "hover:bg-green-700",
-          "active:bg-green-800"
-        );
       }
     } else {
-      // 'error'
-      targetHeading.classList.add("text-red-400"); // Red for errors
+      targetPopup = errorPopup;
+      targetMessageElement = errorMessageElement;
+      targetHeading = errorPopup.querySelector("h2");
+      targetButton = closeErrorButton;
       targetHeading.textContent = "Error!";
+      targetHeading.classList.add("text-red-400");
       targetButton.textContent = "OK";
+      targetButton.classList.remove(
+        "bg-green-600",
+        "hover:bg-green-700",
+        "active:bg-green-800"
+      );
       targetButton.classList.add(
         "bg-red-600",
         "hover:bg-red-700",
@@ -177,10 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
 
-    if (targetMessageElement) {
-      targetMessageElement.textContent = message;
-    }
-
+    if (targetMessageElement) targetMessageElement.textContent = message;
     toggleVisibility(targetPopup, true);
   }
 
@@ -193,9 +163,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectedPlan = event.target.dataset.plan;
 
     if (!selectedAmount || !selectedPlan) {
-      console.error(
-        "Error: Missing data-price or data-plan on the clicked subscribe button."
-      );
       displayUserMessage(
         "An issue occurred with plan selection. Please try again.",
         "error"
@@ -203,7 +170,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Store data directly on the paymentForm for easier access during submission
     paymentForm.dataset.amount = selectedAmount;
     paymentForm.dataset.plan = selectedPlan;
 
@@ -211,32 +177,23 @@ document.addEventListener("DOMContentLoaded", () => {
       planDetailsElement.textContent = `You selected: ${selectedPlan} for Kes. ${selectedAmount}/-`;
     }
 
-    resetUI(); // Ensure a clean slate
+    resetUI();
     toggleVisibility(paymentPopup, true);
   }
 
   /**
-   * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx or 01xxxxxxxxx)
-   * and rejects numbers in the 254 format.
+   * Validates the phone number format for Kenyan Safaricom numbers (07xxxxxxxxx or 01xxxxxxxxx).
    * @param {string} phone - The phone number string.
    * @returns {string|null} The normalized phone number (254XXXXXXXXX) or null if invalid.
    */
   function validateAndNormalizePhoneNumber(phone) {
     phone = String(phone).trim();
-
-    // Regex for Kenyan mobile numbers: starts with 07 or 01 followed by 8 digits.
-    // This now strictly rejects the 254 format.
     const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
 
     if (!kenyanPhoneRegex.test(phone)) {
-      return null; // Invalid format
+      return null;
     }
-
-    // Normalize to 254 format
-    if (phone.startsWith("0")) {
-      return "254" + phone.substring(1);
-    }
-    return phone; // This line is now unreachable due to the regex, but kept for logical completeness.
+    return "254" + phone.substring(1);
   }
 
   /**
@@ -244,9 +201,8 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {Event} event - The form submission event.
    */
   async function handlePaymentSubmission(event) {
-    event.preventDefault(); // Prevent default form submission
+    event.preventDefault();
 
-    // Disable the pay button to prevent multiple clicks
     payButton.disabled = true;
     payButton.textContent = "Processing...";
     payButton.classList.add("opacity-50", "cursor-not-allowed");
@@ -256,28 +212,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!normalizedPhone) {
       displayUserMessage(
-        "Invalid phone number. Please enter a valid Kenyan mobile number starting with 07 or 01 (e.g., 0712345678 or 0112345678).",
+        "Invalid phone number. Please enter a valid Kenyan mobile number starting with **07** or **01** (e.g., 0712345678).",
         "error"
       );
-      // Button re-enabled by displayUserMessage -> resetUI
       return;
     }
-    phoneNumber = normalizedPhone; // Use the normalized phone number
+    phoneNumber = normalizedPhone;
 
     const amount = paymentForm.dataset.amount;
     const packageDescription = paymentForm.dataset.plan;
 
-    // Double-check amount and plan from data attributes
     if (!amount || !packageDescription) {
       displayUserMessage(
         "Missing payment details. Please re-select your plan.",
         "error"
       );
-      // Button re-enabled by displayUserMessage -> resetUI
       return;
     }
 
-    // Show a "processing" message
     displayUserMessage(
       "Your payment request is being sent. Please check your phone for the M-Pesa prompt.",
       "processing"
@@ -294,45 +246,32 @@ document.addEventListener("DOMContentLoaded", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json", // Indicate that we prefer JSON response
+          Accept: "application/json",
         },
         body: JSON.stringify(data),
       });
 
-      const result = await response.json(); // Always attempt to parse JSON
+      const result = await response.json();
 
       if (response.ok) {
-        // Check for HTTP 2xx status codes
-        console.log("Payment initiated successfully:", result);
         displayUserMessage(
           result.customerMessage ||
             result.message ||
             "Payment request sent! Please check your phone for the M-Pesa prompt.",
           "success"
         );
-        // Auto-hide the success message after a few seconds, as the user needs to act on their phone
-        setTimeout(resetUI, 7000); // Give user time to see the message and get the prompt
+        setTimeout(resetUI, 7000);
       } else {
-        // Server responded with an error (e.g., 400, 500)
-        console.error("Server error during payment initiation:", result);
         const errorMessage =
           result.message ||
           "An unexpected error occurred during payment. Please try again or contact support.";
         displayUserMessage("Payment failed: " + errorMessage, "error");
       }
     } catch (error) {
-      // Network errors (e.g., server down, no internet)
-      console.error(
-        "Network or parsing error during payment initiation:",
-        error
-      );
       displayUserMessage(
         "Could not connect to the payment service. Please check your internet connection or try again later.",
         "error"
       );
-    } finally {
-      // Button state is managed by displayUserMessage -> resetUI,
-      // which will re-enable the button when any message popup is closed.
     }
   }
 
@@ -341,14 +280,31 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {Event} event - The form submission event.
    */
   async function handleCommentsSubmission(event) {
-    event.preventDefault(); // Prevent default form submission
+    event.preventDefault();
 
-    // Disable the submit button to prevent multiple clicks
+    // Perform validation
+    let allFilled = true;
+    commentsRequiredFields.forEach((field) => {
+      if (!field.value.trim()) {
+        allFilled = false;
+        field.classList.add("border-red-500");
+      } else {
+        field.classList.remove("border-red-500");
+      }
+    });
+
+    if (!allFilled) {
+      displayUserMessage(
+        "Please fill in all required fields before submitting.",
+        "error"
+      );
+      return;
+    }
+
     commentsSubmitButton.disabled = true;
     commentsSubmitButton.textContent = "Submitting...";
     commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
 
-    // Get form data
     const formData = new FormData(commentsForm);
     const commentsData = {};
     for (let [key, value] of formData.entries()) {
@@ -379,29 +335,23 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       }
     } catch (error) {
-      console.error("Error submitting comments:", error);
       displayUserMessage(
         "Network error: Could not submit comments. Please try again later.",
         "error"
       );
-    } finally {
-      // Button state is reset by displayUserMessage -> resetUI
     }
   }
 
   // --- 3. Event Listeners ---
 
-  // Attach click listeners to all subscribe buttons
   subscribeButtons.forEach((button) => {
     button.addEventListener("click", showPaymentPopupHandler);
   });
 
-  // Attach submit listener to the payment form
   if (paymentForm) {
     paymentForm.addEventListener("submit", handlePaymentSubmission);
   }
 
-  // Attach click listeners to close buttons for popups
   if (closeButton) {
     closeButton.addEventListener("click", resetUI);
   }
@@ -411,16 +361,83 @@ document.addEventListener("DOMContentLoaded", () => {
   if (closeSuccessButton) {
     closeSuccessButton.addEventListener("click", resetUI);
   }
-  // Close popups when clicking on the overlay itself
   if (overlay) {
-    overlay.addEventListener("click", resetUI);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        resetUI();
+      }
+    });
   }
 
-  // Attach submit listener to the comments form
+  // Main comments form event listener
   if (commentsForm) {
     commentsForm.addEventListener("submit", handleCommentsSubmission);
   }
+
+  // --- Comments Form Reset and Validation Feedback ---
+  if (resetCommentsButton) {
+    resetCommentsButton.addEventListener("click", () => {
+      commentsForm.reset();
+      resetUI(); // Also resets any visible popups
+      displayUserMessage("Comments form has been reset.", "success");
+    });
+  }
+
+  // Real-time validation feedback on input
+  commentsForm.addEventListener("input", (event) => {
+    const target = event.target;
+    if (target.matches("[required]")) {
+      if (target.value.trim()) {
+        target.classList.remove("border-red-500");
+      } else {
+        target.classList.add("border-red-500");
+      }
+    }
+  });
+
+  // Toggle submit button state based on required fields
+  commentsForm.addEventListener("input", () => {
+    let allFilled = true;
+    commentsRequiredFields.forEach((field) => {
+      if (!field.value.trim()) {
+        allFilled = false;
+      }
+    });
+
+    if (allFilled) {
+      commentsSubmitButton.disabled = false;
+      commentsSubmitButton.textContent = "Submit";
+      commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
+    } else {
+      commentsSubmitButton.disabled = true;
+      commentsSubmitButton.textContent = "Fill all fields";
+      commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
+    }
+  });
+
+  // --- Accessibility Enhancements ---
+  document.addEventListener("focusin", (event) => {
+    // Check if the focused element is a form control or button
+    const target = event.target;
+    if (
+      target.matches(
+        'input, textarea, select, button, a[href], [tabindex]:not([tabindex="-1"])'
+      )
+    ) {
+      target.classList.add(
+        "focus:outline-none",
+        "focus:ring-2",
+        "focus:ring-blue-400"
+      );
+    }
+  });
+
+  document.addEventListener("focusout", (event) => {
+    const target = event.target;
+    target.classList.remove(
+      "focus:outline-none",
+      "focus:ring-2",
+      "focus:ring-blue-400"
+    );
+  });
 });
-// Note: Ensure the API_BASE_URL is correct for your deployment
-// This script should be included in your HTML file after the DOM is fully loaded
-// to ensure all elements are available for manipulation.

@@ -44,7 +44,7 @@ const EMAIL_RECIPIENT = process.env.EMAIL_RECIPIENT;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // --- Critical Environment Variable Check ---
-// Ensures all necessary variables are present before the server starts.
+// This log is crucial to know what's missing on server startup. Do not remove.
 const requiredEnvVars = [
   "MPESA_CONSUMER_KEY",
   "MPESA_CONSUMER_SECRET",
@@ -75,6 +75,7 @@ mongoose
     console.log("[DB] Connected to MongoDB successfully.");
   })
   .catch((err) => {
+    // This log is critical for checking if the database connection failed.
     console.error("[DB] MongoDB initial connection error:", err.message);
     process.exit(1);
   });
@@ -105,7 +106,6 @@ const paymentSchema = new mongoose.Schema(
     },
     TransactionDate: { type: Date },
     PhoneNumber: { type: String },
-    // ADDED: Storing the service package selected by the user.
     packageDescription: { type: String },
     status: {
       type: String,
@@ -127,7 +127,6 @@ const paymentSchema = new mongoose.Schema(
   }
 );
 
-// Pre-save hook: Handle empty string for MpesaReceiptNumber
 paymentSchema.pre("save", function (next) {
   if (this.MpesaReceiptNumber === "") {
     this.MpesaReceiptNumber = undefined;
@@ -163,21 +162,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- Helper for Phone Number Normalization and Validation (IMPROVED) ---
-/**
- * Normalizes and validates a Kenyan phone number.
- * Accepts numbers starting with 07, 01, 2547, or 2541.
- * @param {string} phone - The phone number to normalize.
- * @returns {string|null} The normalized phone number in 254 format, or null if invalid.
- */
+// --- Helper for Phone Number Normalization and Validation ---
 function normalizePhoneNumber(phone) {
   phone = String(phone).trim();
   const kenyanPhoneRegex = /^(0(1|7)\d{8}|254(1|7)\d{8})$/;
-
   if (!kenyanPhoneRegex.test(phone)) {
-    return null; // Invalid format
+    return null;
   }
-
   if (phone.startsWith("0")) {
     return "254" + phone.substring(1);
   }
@@ -245,10 +236,12 @@ app.post("/api/process_payment", async (req, res, next) => {
       const tokenError = await tokenResponse
         .json()
         .catch(() => ({ message: "Failed to parse M-Pesa token error" }));
+      // Refined log: Do not log the full tokenError object to prevent data leaks.
       console.error(
-        "Failed to get M-Pesa access token:",
+        "Failed to get M-Pesa access token. Status:",
         tokenResponse.status,
-        tokenError
+        "Error message:",
+        tokenError.errorMessage || tokenError.message
       );
       throw new APIError(
         "Failed to authenticate with M-Pesa. Please try again later.",
@@ -260,7 +253,10 @@ app.post("/api/process_payment", async (req, res, next) => {
     const accessToken = tokenData.access_token;
 
     if (!accessToken) {
-      console.error("M-Pesa access token not found in response:", tokenData);
+      // Refined log: Do not log the full tokenData object.
+      console.error(
+        "M-Pesa authentication failed unexpectedly: No access token received."
+      );
       throw new APIError(
         "M-Pesa authentication failed unexpectedly: No access token received.",
         500
@@ -300,7 +296,6 @@ app.post("/api/process_payment", async (req, res, next) => {
     const stkPushData = await stkPushResponse.json();
 
     if (stkPushData.ResponseCode === "0") {
-      // REFINED: Now includes packageDescription in the initial payment record.
       const newPayment = new Payment({
         MerchantRequestID: stkPushData.MerchantRequestID,
         CheckoutRequestID: stkPushData.CheckoutRequestID,
@@ -337,7 +332,6 @@ app.post("/api/process_payment", async (req, res, next) => {
         ResultCode: stkPushData.ResponseCode,
         ResultDesc: errorMessage,
         RawCallbackData: stkPushData,
-        // For failed payments, it's also good practice to store the package description.
         packageDescription: packageDescription,
       });
       await failedPayment
@@ -357,13 +351,12 @@ app.post("/api/process_payment", async (req, res, next) => {
   }
 });
 
-// M-Pesa Callback URL (Confirmation and Validation URLs go here)
+// M-Pesa Callback URL
 app.post("/api/mpesa_callback", async (req, res) => {
   const callbackData = req.body;
   // Always return a 200 OK status immediately to M-Pesa.
   res.status(200).json({ MpesaResponse: "Callback received" });
 
-  // Process the callback data in a non-blocking way using setImmediate.
   setImmediate(async () => {
     try {
       if (!callbackData.Body || !callbackData.Body.stkCallback) {
@@ -432,27 +425,19 @@ app.post("/api/mpesa_callback", async (req, res) => {
         console.log(
           `Payment record updated/created for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
         );
-
-        // --- SERVICE FULFILLMENT LOGIC ---
-        // This is the core logic for what happens after a successful payment.
-        // It's placed here to ensure the payment is fully processed and recorded
-        // before attempting to activate the service.
         if (updatedPayment.status === "Completed") {
           console.log(
             `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
           );
-
-          // Example: Activating a user's hotspot service based on the package.
-          // const plan = updatedPayment.packageDescription;
-          // const customerPhone = updatedPayment.PhoneNumber;
-          // await activateHotspotService(customerPhone, plan);
         }
       } else {
+        // This is a crucial warning log to detect missing payment records.
         console.warn(
           `[DB Issue] findOneAndUpdate did not return a document for CheckoutRequestID ${checkoutRequestID}.`
         );
       }
     } catch (error) {
+      // This is a critical error log for tracking callback failures.
       console.error(
         "CRITICAL: Error processing M-Pesa callback (async background job):",
         error
@@ -463,6 +448,7 @@ app.post("/api/mpesa_callback", async (req, res) => {
 
 // Endpoint to retrieve all payments (SECURE THIS!)
 app.get("/api/payments", async (req, res, next) => {
+  // This check is a great security practice. It ensures this endpoint is protected in production.
   if (
     process.env.NODE_ENV === "production" &&
     (!req.headers.authorization ||
@@ -551,11 +537,13 @@ app.post("/api/submit_comment", async (req, res, next) => {
 });
 
 // --- Centralized Error Handling Middleware ---
+// This is your most important security measure against leaking server details.
 app.use((err, req, res, next) => {
   const logLevel = err.statusCode && err.statusCode < 500 ? "warn" : "error";
   if (process.env.NODE_ENV !== "production") {
     console[logLevel]("Unhandled Server Error (DEV):", err.stack || err);
   } else {
+    // In production, log a minimal message and no stack trace.
     console[logLevel]("Unhandled Server Error (PROD):", err.message, {
       path: req.path,
       method: req.method,
@@ -622,6 +610,7 @@ const shutdown = () => {
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+// These logs are critical for catching unexpected errors that can crash the server.
 process.on("unhandledRejection", (reason, promise) => {
   console.error("UNHANDLED REJECTION:", reason.message || reason);
 });
