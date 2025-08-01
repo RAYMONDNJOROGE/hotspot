@@ -56,7 +56,6 @@ const requiredEnvVars = [
 ];
 
 const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
-
 if (missingEnvVars.length > 0) {
   console.error(
     `CRITICAL ERROR: The following required environment variables are missing: ${missingEnvVars.join(
@@ -69,9 +68,7 @@ if (missingEnvVars.length > 0) {
 // --- Connect to MongoDB ---
 mongoose
   .connect(MONGODB_URI)
-  .then(() => {
-    console.log("[DB] Connected to MongoDB successfully.");
-  })
+  .then(() => console.log("[DB] Connected to MongoDB successfully."))
   .catch((err) => {
     console.error("[DB] MongoDB initial connection error:", err.message);
     process.exit(1);
@@ -119,10 +116,7 @@ const paymentSchema = new mongoose.Schema(
     RawCallbackData: { type: mongoose.Schema.Types.Mixed },
     expiresAt: { type: Date },
   },
-  {
-    timestamps: true,
-    strict: true,
-  }
+  { timestamps: true, strict: true }
 );
 
 paymentSchema.pre("save", function (next) {
@@ -136,12 +130,10 @@ const Payment = mongoose.model("Payment", paymentSchema);
 
 // --- Middleware Configuration ---
 app.use(helmet());
-
 const allowedOrigins =
   process.env.NODE_ENV === "production"
     ? ["https://hotspot-gved.onrender.com"]
     : ["http://localhost:3000", "http://localhost:5500"];
-
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -154,7 +146,6 @@ app.use(
     },
   })
 );
-
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -164,22 +155,15 @@ app.use(express.static(path.join(__dirname, "public")));
 function normalizePhoneNumber(phone) {
   phone = String(phone).trim();
   const kenyanPhoneRegex = /^(0(1|7)\d{8}|254(1|7)\d{8})$/;
-  if (!kenyanPhoneRegex.test(phone)) {
-    return null;
-  }
-  if (phone.startsWith("0")) {
-    return "254" + phone.substring(1);
-  }
+  if (!kenyanPhoneRegex.test(phone)) return null;
+  if (phone.startsWith("0")) return "254" + phone.substring(1);
   return phone;
 }
 
 // --- Nodemailer transporter setup ---
 const transporter = nodemailer.createTransport({
   service: "gmail",
-  auth: {
-    user: EMAIL_USER,
-    pass: EMAIL_PASS,
-  },
+  auth: { user: EMAIL_USER, pass: EMAIL_PASS },
 });
 
 // --- API Routes ---
@@ -188,14 +172,12 @@ const transporter = nodemailer.createTransport({
 app.post("/api/process_payment", async (req, res, next) => {
   try {
     let { amount, phone, packageDescription } = req.body;
-
     if (!amount || !phone || !packageDescription) {
       throw new APIError(
         "Missing required payment details: amount, phone, or package description.",
         400
       );
     }
-
     amount = parseFloat(amount);
     if (isNaN(amount) || amount <= 0) {
       throw new APIError(
@@ -203,7 +185,6 @@ app.post("/api/process_payment", async (req, res, next) => {
         400
       );
     }
-
     const normalizedPhone = normalizePhoneNumber(phone);
     if (!normalizedPhone) {
       throw new APIError(
@@ -217,29 +198,18 @@ app.post("/api/process_payment", async (req, res, next) => {
       .toISOString()
       .replace(/[^0-9]/g, "")
       .slice(0, 14);
-
     const auth = Buffer.from(
       `${MPESA_CONSUMER_KEY}:${MPESA_CONSUMER_SECRET}`
     ).toString("base64");
 
     const tokenResponse = await fetch(
       `${MPESA_API_BASE_URL}/oauth/v1/generate?grant_type=client_credentials`,
-      {
-        method: "GET",
-        headers: { Authorization: `Basic ${auth}` },
-      }
+      { method: "GET", headers: { Authorization: `Basic ${auth}` } }
     );
-
     if (!tokenResponse.ok) {
       const tokenError = await tokenResponse
         .json()
         .catch(() => ({ message: "Failed to parse M-Pesa token error" }));
-      console.error(
-        "Failed to get M-Pesa access token. Status:",
-        tokenResponse.status,
-        "Error message:",
-        tokenError.errorMessage || tokenError.message
-      );
       throw new APIError(
         "Failed to authenticate with M-Pesa. Please try again later.",
         tokenResponse.status,
@@ -248,11 +218,7 @@ app.post("/api/process_payment", async (req, res, next) => {
     }
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
-
     if (!accessToken) {
-      console.error(
-        "M-Pesa authentication failed unexpectedly: No access token received."
-      );
       throw new APIError(
         "M-Pesa authentication failed unexpectedly: No access token received.",
         500
@@ -262,7 +228,6 @@ app.post("/api/process_payment", async (req, res, next) => {
     const password = Buffer.from(
       `${MPESA_BUSINESS_SHORTCODE}${MPESA_PASSKEY}${timestamp}`
     ).toString("base64");
-
     const stkPushPayload = {
       BusinessShortCode: MPESA_BUSINESS_SHORTCODE,
       Password: password,
@@ -288,7 +253,6 @@ app.post("/api/process_payment", async (req, res, next) => {
         body: JSON.stringify(stkPushPayload),
       }
     );
-
     const stkPushData = await stkPushResponse.json();
 
     if (stkPushData.ResponseCode === "0") {
@@ -318,7 +282,6 @@ app.post("/api/process_payment", async (req, res, next) => {
         stkPushData.ResponseDescription ||
         stkPushData.errorMessage ||
         "Unknown error from M-Pesa during STK push initiation.";
-
       throw new APIError(
         `Payment initiation failed: ${errorMessage}`,
         400,
@@ -330,7 +293,7 @@ app.post("/api/process_payment", async (req, res, next) => {
   }
 });
 
-// M-Pesa Callback URL
+// M-Pesa Callback URL - Only update if payment was successful
 app.post("/api/mpesa_callback", async (req, res) => {
   const callbackData = req.body;
   res.status(200).json({ MpesaResponse: "Callback received" });
@@ -343,7 +306,6 @@ app.post("/api/mpesa_callback", async (req, res) => {
         );
         return;
       }
-
       const stkCallback = callbackData.Body.stkCallback;
       const merchantRequestID = stkCallback.MerchantRequestID;
       const checkoutRequestID = stkCallback.CheckoutRequestID;
@@ -437,21 +399,18 @@ app.post("/api/mpesa_callback", async (req, res) => {
   });
 });
 
-// NEW: Endpoint for frontend to check the status of a specific payment
+// Endpoint for frontend to check the status of a specific payment
 app.get(
   "/api/check_payment_status/:checkoutRequestID",
   async (req, res, next) => {
     try {
       const { checkoutRequestID } = req.params;
-
-      if (!checkoutRequestID) {
+      if (!checkoutRequestID)
         throw new APIError("CheckoutRequestID is required.", 400);
-      }
 
       const payment = await Payment.findOne({
         CheckoutRequestID: checkoutRequestID,
       });
-
       if (!payment) {
         return res.status(200).json({
           success: true,
@@ -462,7 +421,6 @@ app.get(
 
       const responseStatus = payment.status;
       let responseMessage = "Status is pending.";
-
       if (responseStatus === "Completed") {
         responseMessage =
           "Your payment was successful. Kindly wait for service fulfillment.";
@@ -510,7 +468,6 @@ app.get("/api/payments", async (req, res, next) => {
       .sort({ [sort]: sortOrder })
       .skip(skip)
       .limit(parseInt(limit));
-
     const totalPayments = await Payment.countDocuments(query);
 
     res.json({
@@ -533,11 +490,9 @@ app.get("/api/payments", async (req, res, next) => {
 app.post("/api/submit_comment", async (req, res, next) => {
   try {
     const { firstName, secondName, phone, email, commentsText } = req.body;
-
     if (!commentsText) {
       return next(new APIError("Comment text is required.", 400));
     }
-
     const mailOptions = {
       from: EMAIL_USER,
       to: EMAIL_RECIPIENT,
@@ -555,7 +510,6 @@ app.post("/api/submit_comment", async (req, res, next) => {
         }</p>
       `,
     };
-
     const info = await transporter.sendMail(mailOptions);
     console.log("Email sent: %s", info.messageId);
 
@@ -622,14 +576,12 @@ app.get("/api/mikrotik/check_payment", async (req, res, next) => {
         .status(400)
         .json({ success: false, message: "Phone number is required." });
     }
-
     const normalizedPhone = normalizePhoneNumber(phone);
     if (!normalizedPhone) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid phone number format." });
     }
-
     // Find the most recent successful payment
     const payment = await Payment.findOne({
       PhoneNumber: normalizedPhone,
@@ -646,7 +598,7 @@ app.get("/api/mikrotik/check_payment", async (req, res, next) => {
       else if (payment.packageDescription.includes("24-Hour"))
         durationHours = 24;
       if (payment.packageDescription.toLowerCase().includes("unlimited"))
-        durationHours = 24; // or your logic
+        durationHours = 24;
 
       // Use expiresAt from DB if available, otherwise calculate
       let expiresAt = payment.expiresAt
@@ -673,7 +625,7 @@ app.get("/api/mikrotik/check_payment", async (req, res, next) => {
           paid: true,
           amount: payment.Amount,
           plan: payment.packageDescription,
-          bandwidth, // MikroTik can use this to assign speed profile
+          bandwidth,
           paidAt: payment.createdAt,
           expiresAt,
           receipt: payment.MpesaReceiptNumber,
@@ -735,3 +687,13 @@ process.on("uncaughtException", (err) => {
 });
 
 module.exports = app;
+// Export the app for testing purposes
+if (require.main === module) {
+  // Only start the server if this file is run directly
+  server.listen(PORT, () => {
+    console.log(`[SERVER] Server is running on http://localhost:${PORT}`);
+  });
+} else {
+  // If this file is imported, export the app for testing
+  module.exports = app;
+}
