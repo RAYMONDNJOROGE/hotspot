@@ -505,7 +505,7 @@ app.post("/api/submit_comment", async (req, res, next) => {
       html: `
         <table>
         <thead>
-        <th colspan="2"><strong>You have received new comments from ${firstName} ${secondName}</strong></th>
+        <th colspan="2"><strong>You have received a new comment from ${firstName} ${secondName}</strong></th>
         </thead>
         <tbody>
         <tr>
