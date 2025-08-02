@@ -107,13 +107,14 @@ const paymentSchema = new mongoose.Schema(
       ],
     },
     RawCallbackData: { type: mongoose.Schema.Types.Mixed },
-    expiresAt: { type: Date },
+    expiresAt: { type: Date, index: true }, // Added index for potential cleanup jobs
   },
   { timestamps: true, strict: true }
 );
 
 paymentSchema.pre("save", function (next) {
-  if (this.MpesaReceiptNumber === "") {
+  // Ensure MpesaReceiptNumber is not an empty string
+  if (this.isModified("MpesaReceiptNumber") && this.MpesaReceiptNumber === "") {
     this.MpesaReceiptNumber = undefined;
   }
   next();
@@ -144,13 +145,37 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- Helper for Phone Number Normalization ---
+// --- Helper Functions (extracted for better reusability) ---
+/**
+ * Normalizes a Kenyan phone number to the '254' format.
+ * @param {string} phone The phone number to normalize.
+ * @returns {string|null} The normalized phone number or null if invalid.
+ */
 function normalizePhoneNumber(phone) {
   phone = String(phone).trim();
   const kenyanPhoneRegex = /^(0(1|7)\d{8}|254(1|7)\d{8})$/;
   if (!kenyanPhoneRegex.test(phone)) return null;
   if (phone.startsWith("0")) return "254" + phone.substring(1);
   return phone;
+}
+
+/**
+ * Calculates the expiry date for a given package description.
+ * @param {string} packageDescription The description of the package.
+ * @param {Date} [paidAt=new Date()] The date the payment was made.
+ * @returns {Date} The calculated expiry date.
+ */
+function calculateExpiry(packageDescription, paidAt = new Date()) {
+  let durationHours = 1; // Default to 1 hour
+  const desc = packageDescription.toLowerCase();
+
+  if (desc.includes("3-hour")) durationHours = 3;
+  else if (desc.includes("7-hour")) durationHours = 7;
+  else if (desc.includes("14-hour")) durationHours = 14;
+  else if (desc.includes("24-hour") || desc.includes("unlimited"))
+    durationHours = 24;
+
+  return new Date(paidAt.getTime() + durationHours * 60 * 60 * 1000);
 }
 
 // --- Nodemailer transporter setup ---
@@ -289,13 +314,10 @@ app.post("/api/process_payment", async (req, res, next) => {
 
 // --- M-Pesa Callback URL ---
 app.post("/api/callback", async (req, res) => {
-  // Log every callback attempt for debugging
-  console.log("M-Pesa callback received at:", new Date().toISOString());
-  console.log("Request headers:", req.headers);
-  console.log("Request body:", JSON.stringify(req.body));
-
+  // Always respond immediately to the M-Pesa server to prevent timeouts.
   res.status(200).json({ MpesaResponse: "Callback received" });
 
+  // Use setImmediate to process the callback data asynchronously in the background.
   setImmediate(async () => {
     try {
       const callbackData = req.body;
@@ -312,14 +334,43 @@ app.post("/api/callback", async (req, res) => {
       const resultDesc =
         stkCallback.ResultDesc || "No specific description provided.";
 
-      // Default status mapping
-      let status = "Processing";
-      if (resultCode === 0) status = "Completed";
-      else if (resultCode === 1032) status = "Cancelled";
-      else if (resultCode === 1) status = "Failed";
-      else if (resultCode === 1037) status = "Timeout";
-      else status = "Failed"; // fallback for any other error
+      // --- Security Check: Ensure this is a known transaction ---
+      const existingPayment = await Payment.findOne({
+        CheckoutRequestID: checkoutRequestID,
+      });
+      if (!existingPayment) {
+        console.warn(
+          `[Security Warning] Received callback for an unknown CheckoutRequestID: ${checkoutRequestID}. Discarding.`
+        );
+        return; // Ignore callbacks for transactions we didn't initiate.
+      }
 
+      // --- Avoid race conditions by not updating an already completed transaction ---
+      if (existingPayment.status === "Completed") {
+        console.warn(
+          `[Race Condition] Received duplicate callback for CheckoutRequestID: ${checkoutRequestID}. Status is already 'Completed'.`
+        );
+        return;
+      }
+
+      // --- Map resultCode to a more human-readable status ---
+      let status;
+      switch (resultCode) {
+        case 0:
+          status = "Completed";
+          break;
+        case 1032:
+          status = "Cancelled";
+          break;
+        case 1037: // This is "Timeout"
+          status = "Timeout";
+          break;
+        default:
+          status = "Failed";
+          break;
+      }
+
+      // --- Extract and format data from the callback metadata ---
       const updateFields = {
         ResultCode: resultCode,
         ResultDesc: resultDesc,
@@ -335,9 +386,10 @@ app.post("/api/callback", async (req, res) => {
             updateFields.MpesaReceiptNumber = item.Value;
           if (item.Name === "TransactionDate") {
             const dateString = item.Value;
+            // Parse date string (e.g., '20230802110129') into a Date object
             if (dateString && dateString.length === 14) {
               const year = dateString.substring(0, 4);
-              const month = dateString.substring(4, 6) - 1;
+              const month = dateString.substring(4, 6) - 1; // Month is 0-indexed
               const day = dateString.substring(6, 8);
               const hour = dateString.substring(8, 10);
               const minute = dateString.substring(10, 12);
@@ -352,47 +404,22 @@ app.post("/api/callback", async (req, res) => {
         });
       }
 
-      // Set expiresAt only for successful payments
+      // --- Use the centralized helper function to calculate expiry ---
       if (status === "Completed") {
-        let durationHours = 1;
-        const desc = updateFields.packageDescription || "";
-        if (desc.includes("3-Hour")) durationHours = 3;
-        else if (desc.includes("7-Hour")) durationHours = 7;
-        else if (desc.includes("14-Hour")) durationHours = 14;
-        else if (desc.includes("24-Hour")) durationHours = 24;
-        if (desc.toLowerCase().includes("unlimited")) durationHours = 24;
-        updateFields.expiresAt = new Date(
-          Date.now() + durationHours * 60 * 60 * 1000
+        updateFields.expiresAt = calculateExpiry(
+          existingPayment.packageDescription
         );
       }
 
-      const query = {
-        $or: [
-          { CheckoutRequestID: checkoutRequestID },
-          { MerchantRequestID: merchantRequestID },
-        ],
-      };
-
-      const updatedPayment = await Payment.findOneAndUpdate(
-        query,
+      const updatedPayment = await Payment.findByIdAndUpdate(
+        existingPayment._id,
         { $set: updateFields },
-        { new: true, upsert: false, runValidators: true }
+        { new: true, runValidators: true }
       );
 
-      if (updatedPayment) {
-        console.log(
-          `Payment record updated for CheckoutRequestID ${checkoutRequestID}. Status: ${updatedPayment.status}`
-        );
-        if (updatedPayment.status === "Completed") {
-          console.log(
-            `[Service Fulfillment] Payment for ${updatedPayment.MpesaReceiptNumber} completed. Fulfilling service for ${updatedPayment.PhoneNumber}.`
-          );
-        }
-      } else {
-        console.warn(
-          `[DB Issue] No existing payment found for CheckoutRequestID ${checkoutRequestID}.`
-        );
-      }
+      console.log(
+        `[Callback Update] Payment for CheckoutRequestID ${checkoutRequestID} updated. Status: ${updatedPayment.status}.`
+      );
     } catch (error) {
       console.error(
         "CRITICAL: Error processing M-Pesa callback (async background job):",
@@ -414,16 +441,20 @@ app.get(
       const payment = await Payment.findOne({
         CheckoutRequestID: checkoutRequestID,
       });
+
       if (!payment) {
-        return res.status(200).json({
+        // Return a 202 Accepted status for a pending/unknown payment
+        return res.status(202).json({
           success: true,
           status: "Processing",
-          message: "Payment record not found. Awaiting callback.",
+          message:
+            "Payment record not found or awaiting M-Pesa callback. Please try again in a moment.",
         });
       }
 
-      const responseStatus = payment.status;
       let responseMessage = "Status is pending.";
+      const responseStatus = payment.status;
+
       if (responseStatus === "Completed") {
         responseMessage =
           "Your payment was successful. Kindly wait for service fulfillment.";
@@ -448,13 +479,18 @@ app.get(
 
 // --- Endpoint to retrieve all payments (SECURE THIS!) ---
 app.get("/api/payments", async (req, res, next) => {
-  if (
-    process.env.NODE_ENV === "production" &&
-    (!req.headers.authorization ||
-      !req.headers.authorization.startsWith("Bearer "))
-  ) {
+  // A simple bearer token check. This should be replaced with a proper JWT or API key system.
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return next(new APIError("Authentication required.", 401));
   }
+  const token = authHeader.split(" ")[1];
+  // --- Replace with actual token validation logic ---
+  // e.g., if (token !== process.env.ADMIN_API_KEY) { ... }
+  if (token !== process.env.ADMIN_API_KEY) {
+    return next(new APIError("Invalid authentication token.", 403));
+  }
+
   try {
     const {
       page = 1,
@@ -570,54 +606,35 @@ app.get("/api/mikrotik/check_payment", async (req, res, next) => {
       status: "Completed",
     }).sort({ createdAt: -1 });
 
-    if (payment) {
-      let durationHours = 1;
-      if (payment.packageDescription.includes("3-Hour")) durationHours = 3;
-      else if (payment.packageDescription.includes("7-Hour")) durationHours = 7;
-      else if (payment.packageDescription.includes("14-Hour"))
-        durationHours = 14;
-      else if (payment.packageDescription.includes("24-Hour"))
-        durationHours = 24;
-      if (payment.packageDescription.toLowerCase().includes("unlimited"))
-        durationHours = 24;
-
-      let expiresAt = payment.expiresAt
-        ? new Date(payment.expiresAt)
-        : new Date(
-            payment.createdAt.getTime() + durationHours * 60 * 60 * 1000
-          );
-      const now = new Date();
-
+    if (payment && payment.expiresAt && new Date() < payment.expiresAt) {
+      // Use the helper to determine bandwidth based on description
+      const desc = payment.packageDescription.toLowerCase();
       let bandwidth = "default";
-      if (payment.packageDescription.toLowerCase().includes("unlimited")) {
+      if (desc.includes("unlimited")) {
         bandwidth = "unlimited";
-      } else if (
-        payment.packageDescription.toLowerCase().includes("3mbps") ||
-        payment.packageDescription.toLowerCase().includes("vybz")
-      ) {
+      } else if (desc.includes("3mbps") || desc.includes("vybz")) {
         bandwidth = "3mbps";
       }
 
-      if (now < expiresAt) {
-        return res.json({
-          success: true,
-          paid: true,
-          amount: payment.Amount,
-          plan: payment.packageDescription,
-          bandwidth,
-          paidAt: payment.createdAt,
-          expiresAt,
-          receipt: payment.MpesaReceiptNumber,
-        });
-      } else {
-        return res.json({
-          success: true,
-          paid: false,
-          message: "Subscription expired.",
-        });
-      }
+      return res.json({
+        success: true,
+        paid: true,
+        amount: payment.Amount,
+        plan: payment.packageDescription,
+        bandwidth,
+        paidAt: payment.createdAt,
+        expiresAt: payment.expiresAt,
+        receipt: payment.MpesaReceiptNumber,
+      });
     } else {
-      return res.json({ success: true, paid: false });
+      // Handles both no payment found and expired payment
+      return res.json({
+        success: true,
+        paid: false,
+        message: payment
+          ? "Subscription expired."
+          : "No valid subscription found.",
+      });
     }
   } catch (error) {
     next(error);

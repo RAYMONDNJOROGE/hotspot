@@ -1,57 +1,58 @@
 const API_BASE_URL = "https://hotspot-gved.onrender.com";
 
 document.addEventListener("DOMContentLoaded", () => {
-  // --- 1. DOM Element Caching & Initial State ---
-  const overlay = document.getElementById("overlay");
-  const paymentPopup = document.getElementById("paymentPopup");
-  const errorPopup = document.getElementById("errorPopup");
-  const successPopup = document.getElementById("successPopup");
+  // --- 1. DOM Element Caching ---
+  const ui = {
+    overlay: document.getElementById("overlay"),
+    paymentPopup: document.getElementById("paymentPopup"),
+    errorPopup: document.getElementById("errorPopup"),
+    successPopup: document.getElementById("successPopup"),
+    phoneNumberInput: document.getElementById("phoneNumber"),
+    paymentForm: document.getElementById("paymentForm"),
+    planDetailsElement: document.getElementById("selectedPlanDetails"),
+    subscribeButtons: document.querySelectorAll(".sub-button"),
+    closeButton: document.getElementById("closeButton"),
+    closeErrorButton: document.getElementById("closeErrorButton"),
+    closeSuccessButton: document.getElementById("closeSuccessButton"),
+    errorMessageElement: document.getElementById("errorMessage"),
+    successMessageElement: document.getElementById("successMessage"),
+    payButton: document.getElementById("payButton"),
+    commentsForm: document.getElementById("commentsForm"),
+    mikrotikLoginForm: document.forms.sendin,
+    mikrotikUsernameInput: document.getElementById("mikrotik_username"),
+    mikrotikPasswordInput: document.getElementById("mikrotik_password"),
+    commentsSubmitButton: null,
+    commentsResetButton: null,
+    commentsRequiredFields: null,
+    macAddressContainer: document.getElementById("mac-container"),
+    macAddressSpan: document.getElementById("mac-address"),
+    currentYearSpan: document.getElementById("currentYear"),
+  };
 
-  const phoneNumberInput = document.getElementById("phoneNumber");
-  const paymentForm = document.getElementById("paymentForm");
-  const planDetailsElement = document.getElementById("selectedPlanDetails");
-  const subscribeButtons = document.querySelectorAll(".sub-button");
-
-  const closeButton = document.getElementById("closeButton");
-  const closeErrorButton = document.getElementById("closeErrorButton");
-  const closeSuccessButton = document.getElementById("closeSuccessButton");
-
-  const errorMessageElement = document.getElementById("errorMessage");
-  const successMessageElement = document.getElementById("successMessage");
-
-  const payButton = document.getElementById("payButton");
-
-  // Comments form elements
-  const commentsForm = document.getElementById("commentsForm");
-  const commentsSubmitButton = commentsForm
-    ? commentsForm.querySelector('button[type="submit"]')
-    : null;
-  const commentsResetButton = commentsForm
-    ? commentsForm.querySelector(".com-res")
-    : null;
-  const commentsRequiredFields = commentsForm
-    ? commentsForm.querySelectorAll("[required]")
-    : [];
-
-  // Mikrotik login form elements
-  const mikrotikLoginForm = document.forms.sendin;
-  const mikrotikUsernameInput = document.getElementById("mikrotik_username");
-  const mikrotikPasswordInput = document.getElementById("mikrotik_password");
-
-  // Global variables
-  let pollingInterval = null;
-  let macAddress = null;
-  let mikrotikLoginUrl = null;
-  let checkoutRequestID = null;
-
-  // Set current year in footer
-  const currentYearSpan = document.getElementById("currentYear");
-  if (currentYearSpan) {
-    currentYearSpan.textContent = new Date().getFullYear();
+  // Assign comment form elements after initial check
+  if (ui.commentsForm) {
+    ui.commentsSubmitButton = ui.commentsForm.querySelector(
+      'button[type="submit"]'
+    );
+    ui.commentsResetButton = ui.commentsForm.querySelector(".com-res");
+    ui.commentsRequiredFields = ui.commentsForm.querySelectorAll("[required]");
   }
 
-  // --- 2. Helper Functions ---
+  // --- 2. State Management ---
+  const state = {
+    pollingInterval: null,
+    macAddress: null,
+    mikrotikLoginUrl: null,
+    checkoutRequestID: null,
+  };
 
+  // --- 3. Helper Functions ---
+
+  /**
+   * Retrieves a URL parameter by name.
+   * @param {string} name The name of the parameter.
+   * @returns {string} The parameter's value or an empty string.
+   */
   function getUrlParameter(name) {
     name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
     const regex = new RegExp("[\\?&]" + name + "=([^&#]*)");
@@ -61,104 +62,112 @@ document.addEventListener("DOMContentLoaded", () => {
       : decodeURIComponent(results[1].replace(/\+/g, " "));
   }
 
-  function toggleVisibility(element, isVisible) {
-    if (element) {
+  /**
+   * Toggles the visibility of a given popup and the main overlay.
+   * @param {HTMLElement} element The popup element to show/hide.
+   * @param {boolean} isVisible Whether to show or hide the element.
+   */
+  function togglePopup(element, isVisible) {
+    if (element && ui.overlay) {
       element.classList.toggle("hidden", !isVisible);
-      overlay.classList.toggle("hidden", !isVisible);
+      ui.overlay.classList.toggle("hidden", !isVisible);
     }
   }
 
+  /**
+   * Resets the UI to its initial state.
+   */
   function resetUI() {
-    toggleVisibility(paymentPopup, false);
-    toggleVisibility(errorPopup, false);
-    toggleVisibility(successPopup, false);
+    togglePopup(ui.paymentPopup, false);
+    togglePopup(ui.errorPopup, false);
+    togglePopup(ui.successPopup, false);
 
-    if (phoneNumberInput) phoneNumberInput.value = "";
-    if (planDetailsElement) planDetailsElement.textContent = "";
-    if (errorMessageElement) errorMessageElement.textContent = "";
-    if (successMessageElement) successMessageElement.textContent = "";
+    if (ui.phoneNumberInput) ui.phoneNumberInput.value = "";
+    if (ui.planDetailsElement) ui.planDetailsElement.textContent = "";
 
-    if (successPopup) {
-      const h2 = successPopup.querySelector("h2");
-      h2.classList.remove("text-red-400", "text-green-400", "text-blue-400");
-    }
-
-    if (payButton) {
-      payButton.disabled = false;
-      payButton.textContent = "Pay";
-      payButton.classList.remove("opacity-50", "cursor-not-allowed");
-    }
-
-    if (commentsSubmitButton) {
-      commentsSubmitButton.disabled = false;
-      commentsSubmitButton.textContent = "Submit";
-      commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
-    }
-
-    commentsRequiredFields.forEach((field) => {
-      field.classList.remove("border-red-500");
+    // Reset button states
+    const buttonsToReset = [ui.payButton, ui.commentsSubmitButton];
+    buttonsToReset.forEach((button) => {
+      if (button) {
+        button.disabled = false;
+        button.textContent = button === ui.payButton ? "Pay" : "Submit";
+        button.classList.remove("opacity-50", "cursor-not-allowed");
+      }
     });
 
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      pollingInterval = null;
+    if (ui.commentsRequiredFields) {
+      ui.commentsRequiredFields.forEach((field) =>
+        field.classList.remove("border-red-500")
+      );
+    }
+
+    if (state.pollingInterval) {
+      clearInterval(state.pollingInterval);
+      state.pollingInterval = null;
     }
   }
 
+  /**
+   * Displays a user message in a popup.
+   * @param {string} message The message to display.
+   * @param {string} type The type of message ('success', 'error', 'processing').
+   */
   function displayUserMessage(message, type = "error") {
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      pollingInterval = null;
-    }
-
     resetUI();
 
-    let targetPopup, targetMessageElement, targetHeading, targetButton;
+    let targetPopup, targetMessageElement, targetHeading;
+    const isSuccess = type === "success";
+    const isProcessing = type === "processing";
+    const isError = type === "error";
 
-    if (type === "success" || type === "processing") {
-      targetPopup = successPopup;
-      targetMessageElement = successMessageElement;
-      targetHeading = successPopup.querySelector("h2");
-      targetButton = closeSuccessButton;
-
-      if (type === "success") {
-        targetHeading.textContent = "Success!";
-        targetHeading.classList.add("text-green-400");
-        targetButton.textContent = "Done";
-      } else {
-        targetHeading.textContent = "Processing...";
-        targetHeading.classList.add("text-blue-400");
-        targetButton.textContent = "OK";
+    if (isSuccess || isProcessing) {
+      targetPopup = ui.successPopup;
+      targetMessageElement = ui.successMessageElement;
+      targetHeading = targetPopup?.querySelector("h2");
+      if (targetHeading) {
+        targetHeading.textContent = isSuccess ? "Success!" : "Processing...";
+        targetHeading.classList.add(
+          isSuccess ? "text-green-400" : "text-blue-400"
+        );
       }
-    } else {
-      targetPopup = errorPopup;
-      targetMessageElement = errorMessageElement;
-      targetHeading = errorPopup.querySelector("h2");
-      targetButton = closeErrorButton;
-      targetHeading.textContent = "Error!";
-      targetHeading.classList.add("text-red-400");
-      targetButton.textContent = "OK";
-      targetButton.classList.remove(
-        "bg-green-600",
-        "hover:bg-green-700",
-        "active:bg-green-800"
-      );
-      targetButton.classList.add(
-        "bg-red-600",
-        "hover:bg-red-700",
-        "active:bg-red-800"
-      );
+      ui.closeSuccessButton.textContent = isSuccess ? "Done" : "OK";
+    } else if (isError) {
+      targetPopup = ui.errorPopup;
+      targetMessageElement = ui.errorMessageElement;
+      targetHeading = targetPopup?.querySelector("h2");
+      if (targetHeading) {
+        targetHeading.textContent = "Error!";
+        targetHeading.classList.add("text-red-400");
+      }
+      ui.closeErrorButton.textContent = "OK";
     }
 
     if (targetMessageElement) targetMessageElement.textContent = message;
-    toggleVisibility(targetPopup, true);
+    if (targetPopup) togglePopup(targetPopup, true);
   }
 
-  function showPaymentPopupHandler(event) {
-    const selectedAmount = event.target.dataset.price;
-    const selectedPlan = event.target.dataset.plan;
+  /**
+   * Validates and normalizes a Kenyan phone number.
+   * @param {string} phone The phone number to validate.
+   * @returns {string|null} The normalized phone number or null if invalid.
+   */
+  function validateAndNormalizePhoneNumber(phone) {
+    phone = String(phone).trim();
+    const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
+    if (!kenyanPhoneRegex.test(phone)) return null;
+    return "254" + phone.substring(1);
+  }
 
-    if (!selectedAmount || !selectedPlan) {
+  // --- 4. Event Handlers ---
+
+  /**
+   * Handles the click event for subscribe buttons.
+   * @param {Event} event The click event.
+   */
+  function showPaymentPopupHandler(event) {
+    const { price, plan } = event.currentTarget.dataset;
+
+    if (!price || !plan) {
       displayUserMessage(
         "An issue occurred with plan selection. Please try again.",
         "error"
@@ -166,117 +175,29 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    paymentForm.dataset.amount = selectedAmount;
-    paymentForm.dataset.plan = selectedPlan;
-
-    if (planDetailsElement) {
-      planDetailsElement.textContent = `You selected: ${selectedPlan} for Kes. ${selectedAmount}/-`;
+    ui.paymentForm.dataset.amount = price;
+    ui.paymentForm.dataset.plan = plan;
+    if (ui.planDetailsElement) {
+      ui.planDetailsElement.textContent = `You selected: ${plan} for Kes. ${price}/-`;
     }
-
     resetUI();
-    toggleVisibility(paymentPopup, true);
+    togglePopup(ui.paymentPopup, true);
   }
 
-  function validateAndNormalizePhoneNumber(phone) {
-    phone = String(phone).trim();
-    const kenyanPhoneRegex = /^(0(1|7)\d{8})$/;
-    if (!kenyanPhoneRegex.test(phone)) {
-      return null;
-    }
-    return "254" + phone.substring(1);
-  }
-
-  // --- Payment Status Polling ---
-  async function pollPaymentStatus() {
-    if (!checkoutRequestID) return;
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/check_payment_status/${checkoutRequestID}`
-      );
-      const result = await response.json();
-
-      if (
-        ["Completed", "Cancelled", "Failed", "Timeout"].includes(result.status)
-      ) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-
-        if (result.status === "Completed") {
-          displayUserMessage(
-            result.message || "Payment successful! Logging you in...",
-            "processing"
-          );
-          await mikrotikLogin();
-        } else if (result.status === "Cancelled") {
-          displayUserMessage(
-            result.message || "Payment was cancelled.",
-            "error"
-          );
-        } else if (result.status === "Failed") {
-          displayUserMessage(result.message || "Payment failed.", "error");
-        } else if (result.status === "Timeout") {
-          displayUserMessage(result.message || "Payment timed out.", "error");
-        }
-      }
-    } catch (error) {
-      clearInterval(pollingInterval);
-      pollingInterval = null;
-      displayUserMessage(
-        "An error occurred while checking payment status. Please try again later.",
-        "error"
-      );
-    }
-  }
-
-  // --- Mikrotik Login ---
-  async function mikrotikLogin() {
-    const phoneNumber = phoneNumberInput.value;
-    const selectedPlan = paymentForm.dataset.plan;
-
-    try {
-      const authResponse = await fetch(`${API_BASE_URL}/api/mikrotik_auth`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phoneNumber: phoneNumber,
-          macAddress: macAddress,
-          package: selectedPlan,
-        }),
-      });
-      const authResult = await authResponse.json();
-
-      if (authResult.success) {
-        mikrotikUsernameInput.value = phoneNumber;
-        mikrotikPasswordInput.value = "payment-user";
-        mikrotikLoginForm.action = mikrotikLoginUrl;
-        mikrotikLoginForm.submit();
-      } else {
-        displayUserMessage(
-          "Failed to log in. Please contact support.",
-          "error"
-        );
-      }
-    } catch (error) {
-      displayUserMessage(
-        "An error occurred during login. Please contact support.",
-        "error"
-      );
-    }
-  }
-
-  // --- Payment Form Submission ---
+  /**
+   * Handles the submission of the payment form.
+   * @param {Event} event The form submission event.
+   */
   async function handlePaymentSubmission(event) {
     event.preventDefault();
 
-    payButton.disabled = true;
-    payButton.textContent = "Processing...";
-    payButton.classList.add("opacity-50", "cursor-not-allowed");
+    ui.payButton.disabled = true;
+    ui.payButton.textContent = "Processing...";
+    ui.payButton.classList.add("opacity-50", "cursor-not-allowed");
 
     const normalizedPhone = validateAndNormalizePhoneNumber(
-      phoneNumberInput.value
+      ui.phoneNumberInput.value
     );
-
     if (!normalizedPhone) {
       displayUserMessage(
         "Invalid phone number. Please enter a valid Kenyan mobile number starting with 07 or 01 (e.g., 0712345678).",
@@ -285,9 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const amount = paymentForm.dataset.amount;
-    const packageDescription = paymentForm.dataset.plan;
-
+    const { amount, plan: packageDescription } = ui.paymentForm.dataset;
     if (!amount || !packageDescription) {
       displayUserMessage(
         "Missing payment details. Please re-select your plan.",
@@ -319,54 +238,117 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
 
       if (response.ok && result.checkoutRequestID) {
-        checkoutRequestID = result.checkoutRequestID;
-        if (pollingInterval) clearInterval(pollingInterval);
-        pollingInterval = setInterval(pollPaymentStatus, 3000);
+        state.checkoutRequestID = result.checkoutRequestID;
+        if (state.pollingInterval) clearInterval(state.pollingInterval);
+        state.pollingInterval = setInterval(pollPaymentStatus, 3000);
       } else {
         const errorMessage =
-          result.message ||
-          "An unexpected error occurred during payment. Please try again or contact support.";
+          result.message || "An unexpected error occurred. Please try again.";
         displayUserMessage("Payment failed: " + errorMessage, "error");
       }
     } catch (error) {
       displayUserMessage(
-        "Could not connect to the payment service. Please check your internet connection or try again later.",
+        "Network error: Could not connect to the payment service. Please check your internet connection or try again later.",
         "error"
       );
     }
   }
 
-  // --- Comments Form Submission ---
-  async function handleCommentsSubmission(event) {
-    event.preventDefault();
+  /**
+   * Polls the payment status from the backend.
+   */
+  async function pollPaymentStatus() {
+    if (!state.checkoutRequestID) return;
 
-    let allFilled = true;
-    commentsRequiredFields.forEach((field) => {
-      if (!field.value.trim()) {
-        allFilled = false;
-        field.classList.add("border-red-500");
-      } else {
-        field.classList.remove("border-red-500");
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/check_payment_status/${state.checkoutRequestID}`
+      );
+      const result = await response.json();
+
+      if (
+        ["Completed", "Cancelled", "Failed", "Timeout"].includes(result.status)
+      ) {
+        clearInterval(state.pollingInterval);
+        state.pollingInterval = null;
+
+        if (result.status === "Completed") {
+          displayUserMessage(
+            result.message || "Payment successful! Logging you in...",
+            "processing"
+          );
+          await mikrotikLogin();
+        } else {
+          displayUserMessage(
+            result.message || `Payment ${result.status.toLowerCase()}.`,
+            "error"
+          );
+        }
       }
-    });
-
-    if (!allFilled) {
+    } catch (error) {
+      clearInterval(state.pollingInterval);
+      state.pollingInterval = null;
       displayUserMessage(
-        "Please fill in all required fields before submitting.",
+        "An error occurred while checking payment status. Please try again later.",
+        "error"
+      );
+    }
+  }
+
+  /**
+   * Performs the MikroTik login.
+   */
+  async function mikrotikLogin() {
+    const phoneNumber = ui.phoneNumberInput.value;
+    const selectedPlan = ui.paymentForm.dataset.plan;
+
+    // Check for required MikroTik variables
+    if (!state.macAddress || !state.mikrotikLoginUrl) {
+      displayUserMessage(
+        "Missing MikroTik session information. You may be logged in already or need to reconnect.",
         "error"
       );
       return;
     }
 
-    commentsSubmitButton.disabled = true;
-    commentsSubmitButton.textContent = "Submitting...";
-    commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
+    try {
+      const authResponse = await fetch(
+        `${API_BASE_URL}/api/mikrotik/check_payment?phone=${phoneNumber}`
+      );
+      const authResult = await authResponse.json();
 
-    const formData = new FormData(commentsForm);
-    const commentsData = {};
-    for (let [key, value] of formData.entries()) {
-      commentsData[key] = value;
+      if (authResult.success && authResult.paid) {
+        ui.mikrotikUsernameInput.value = phoneNumber;
+        ui.mikrotikPasswordInput.value = "payment-user";
+        ui.mikrotikLoginForm.action = state.mikrotikLoginUrl;
+        ui.mikrotikLoginForm.submit();
+      } else {
+        displayUserMessage(
+          authResult.message || "Failed to log in. Please contact support.",
+          "error"
+        );
+      }
+    } catch (error) {
+      displayUserMessage(
+        "An error occurred during login. Please contact support.",
+        "error"
+      );
     }
+  }
+
+  /**
+   * Handles the submission of the comments form.
+   * @param {Event} event The form submission event.
+   */
+  async function handleCommentsSubmission(event) {
+    event.preventDefault();
+
+    ui.commentsSubmitButton.disabled = true;
+    ui.commentsSubmitButton.textContent = "Submitting...";
+    ui.commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
+
+    const formData = new FormData(ui.commentsForm);
+    const commentsData = Object.fromEntries(formData.entries());
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/submit_comment`, {
@@ -382,7 +364,7 @@ document.addEventListener("DOMContentLoaded", () => {
             "Thank you for your comments! We'll get back to you soon.",
           "success"
         );
-        commentsForm.reset();
+        ui.commentsForm.reset();
       } else {
         displayUserMessage(
           `Failed to submit comments: ${result.message || "Unknown error"}`,
@@ -395,110 +377,115 @@ document.addEventListener("DOMContentLoaded", () => {
         "error"
       );
     } finally {
-      commentsSubmitButton.disabled = false;
-      commentsSubmitButton.textContent = "Submit";
-      commentsSubmitButton.classList.remove("opacity-50", "cursor-not-allowed");
+      ui.commentsSubmitButton.disabled = false;
+      ui.commentsSubmitButton.textContent = "Submit";
+      ui.commentsSubmitButton.classList.remove(
+        "opacity-50",
+        "cursor-not-allowed"
+      );
     }
   }
 
-  // --- 3. Initial Setup & Event Listeners ---
+  /**
+   * A unified handler for all close button events.
+   */
+  function handleCloseEvent() {
+    resetUI();
+  }
+
+  // --- 5. Initial Setup & Event Listeners ---
   function init() {
-    macAddress = getUrlParameter("mac");
-    mikrotikLoginUrl = getUrlParameter("link-login-only");
+    // Set up global variables from URL
+    state.macAddress = getUrlParameter("mac");
+    state.mikrotikLoginUrl = getUrlParameter("link-login-only");
 
-    if (macAddress) {
-      const macContainer = document.getElementById("mac-container");
-      const macSpan = document.getElementById("mac-address");
-      if (macContainer && macSpan) {
-        macSpan.textContent = macAddress;
-        macContainer.classList.remove("hidden");
-      }
+    // Display MAC address if available
+    if (state.macAddress && ui.macAddressContainer && ui.macAddressSpan) {
+      ui.macAddressSpan.textContent = state.macAddress;
+      ui.macAddressContainer.classList.remove("hidden");
     }
 
-    subscribeButtons.forEach((button) => {
-      button.addEventListener("click", showPaymentPopupHandler);
-    });
-
-    if (paymentForm) {
-      paymentForm.addEventListener("submit", handlePaymentSubmission);
+    // Set current year in footer
+    if (ui.currentYearSpan) {
+      ui.currentYearSpan.textContent = new Date().getFullYear();
     }
 
-    if (closeButton) {
-      closeButton.addEventListener("click", resetUI);
+    // Event Listeners
+    if (ui.subscribeButtons) {
+      ui.subscribeButtons.forEach((button) =>
+        button.addEventListener("click", showPaymentPopupHandler)
+      );
     }
-    if (closeErrorButton) {
-      closeErrorButton.addEventListener("click", resetUI);
+    if (ui.paymentForm) {
+      ui.paymentForm.addEventListener("submit", handlePaymentSubmission);
     }
-    if (closeSuccessButton) {
-      closeSuccessButton.addEventListener("click", resetUI);
+    if (ui.closeButton) {
+      ui.closeButton.addEventListener("click", handleCloseEvent);
     }
-    if (overlay) {
-      overlay.addEventListener("click", (event) => {
-        if (event.target === overlay) {
-          resetUI();
+    if (ui.closeErrorButton) {
+      ui.closeErrorButton.addEventListener("click", handleCloseEvent);
+    }
+    if (ui.closeSuccessButton) {
+      ui.closeSuccessButton.addEventListener("click", handleCloseEvent);
+    }
+    if (ui.overlay) {
+      ui.overlay.addEventListener("click", (event) => {
+        if (event.target === ui.overlay) {
+          handleCloseEvent();
         }
       });
     }
-
-    if (commentsForm) {
-      commentsForm.addEventListener("submit", handleCommentsSubmission);
-    }
-
-    if (commentsResetButton) {
-      commentsResetButton.addEventListener("click", () => {
-        commentsForm.reset();
-        resetUI();
-      });
+    if (ui.commentsForm) {
+      ui.commentsForm.addEventListener("submit", handleCommentsSubmission);
+      if (ui.commentsResetButton) {
+        ui.commentsResetButton.addEventListener("click", () =>
+          ui.commentsForm.reset()
+        );
+      }
     }
   }
 
-  // --- 4. Additional Enhancements ---
-
-  if (commentsForm) {
-    commentsForm.addEventListener("input", (event) => {
-      const target = event.target;
-      if (target.matches("[required]")) {
-        target.classList.toggle("border-red-500", !target.value.trim());
-      }
-    });
-
-    commentsForm.addEventListener("input", () => {
-      const allFilled = [...commentsRequiredFields].every((field) =>
+  // --- 6. Dynamic UI and Accessibility Enhancements ---
+  if (ui.commentsForm) {
+    const updateCommentsButtonState = () => {
+      const allFilled = [...ui.commentsRequiredFields].every((field) =>
         field.value.trim()
       );
+      ui.commentsSubmitButton.disabled = !allFilled;
+      ui.commentsSubmitButton.textContent = allFilled
+        ? "Submit"
+        : "Fill all fields";
+      ui.commentsSubmitButton.classList.toggle("opacity-50", !allFilled);
+      ui.commentsSubmitButton.classList.toggle(
+        "cursor-not-allowed",
+        !allFilled
+      );
+    };
 
-      if (allFilled) {
-        commentsSubmitButton.disabled = false;
-        commentsSubmitButton.textContent = "Submit";
-        commentsSubmitButton.classList.remove(
-          "opacity-50",
-          "cursor-not-allowed"
+    ui.commentsForm.addEventListener("input", (event) => {
+      if (event.target.matches("[required]")) {
+        event.target.classList.toggle(
+          "border-red-500",
+          !event.target.value.trim()
         );
-      } else {
-        commentsSubmitButton.disabled = true;
-        commentsSubmitButton.textContent = "Fill all fields";
-        commentsSubmitButton.classList.add("opacity-50", "cursor-not-allowed");
       }
+      updateCommentsButtonState();
     });
+
+    // Initial check for button state on page load
+    updateCommentsButtonState();
   }
 
+  // Focus-ring utility (moved to a more concise approach)
   document.addEventListener("focusin", (event) => {
-    const target = event.target;
-    if (
-      target.matches(
-        'input, textarea, select, button, a[href], [tabindex]:not([tabindex="-1"])'
-      )
-    ) {
-      target.classList.add(
-        "focus:outline-none",
-        "focus:ring-2",
-        "focus:ring-blue-400"
-      );
-    }
+    event.target.classList.add(
+      "focus:outline-none",
+      "focus:ring-2",
+      "focus:ring-blue-400"
+    );
   });
   document.addEventListener("focusout", (event) => {
-    const target = event.target;
-    target.classList.remove(
+    event.target.classList.remove(
       "focus:outline-none",
       "focus:ring-2",
       "focus:ring-blue-400"
@@ -507,11 +494,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Scroll-to-top button
   const scrollToTopButton = document.createElement("button");
-  scrollToTopButton.textContent = "↑";
+  scrollToTopButton.innerHTML = "&#x2191;"; // Up arrow character
   scrollToTopButton.className =
-    "fixed bottom-4 right-4 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400";
+    "fixed bottom-4 right-4 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 z-50";
   scrollToTopButton.style.display = "none";
   document.body.appendChild(scrollToTopButton);
+
   window.addEventListener("scroll", () => {
     scrollToTopButton.style.display = window.scrollY > 300 ? "flex" : "none";
   });
@@ -522,4 +510,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initialize the script
   init();
 });
-// --- 5. Error Handling for Missing Elements ---
+// Ensure the script runs after the DOM is fully loaded
+document.addEventListener("DOMContentLoaded", () => {
+  // Initialize the script
+  init();
+});
