@@ -48,7 +48,7 @@ This project is a Node.js backend for managing M-Pesa-powered payments for Mikro
    MPESA_CONSUMER_SECRET=your_consumer_secret
    MPESA_BUSINESS_SHORTCODE=your_shortcode
    MPESA_PASSKEY=your_passkey
-   MPESA_CALLBACK_URL=https://yourdomain.com/api/mpesa_callback
+   MPESA_CALLBACK_URL=https://yourdomain.com/api/callback
    MPESA_API_BASE_URL=https://sandbox.safaricom.co.ke
    MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/dbname
    EMAIL_USER=your_email@gmail.com
