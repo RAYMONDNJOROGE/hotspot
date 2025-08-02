@@ -503,14 +503,33 @@ app.post("/api/submit_comment", async (req, res, next) => {
         secondName || ""
       }`,
       html: `
-        <h2>New Comment Submission</h2>
-        <p><strong>First Name:</strong> ${firstName || "N/A"}</p>
-        <p><strong>Second Name:</strong> ${secondName || "N/A"}</p>
-        <p><strong>Phone:</strong> ${phone || "N/A"}</p>
-        <p><strong>E-mail:</strong> ${email || "N/A"}</p>
-        <p><strong>Comments:</strong><br>${
-          commentsText || "No comments provided."
-        }</p>
+        <table>
+        <thead>
+        <th colspan="2"><strong>You have received new comments from ${firstName} ${secondName}</strong></th>
+        </thead>
+        <tbody>
+        <tr>
+        <td>First Name:</td>
+        <td>${firstName}</td>
+        </tr>
+        <tr>
+        <td>Second Name:</td>
+        <td>${secondName}</td>
+        </tr>
+        <tr>
+        <td>Phone Number:</td>
+        <td>${phone}</td>
+        </tr>
+        <tr>
+        <td>Email:</td>
+        <td>${email}</td>
+        </tr>
+        <tr>
+        <td>Comments:</td>
+        <td>${commentsText}</td>
+        </tr>
+        </tbody>
+        </table>
       `,
     };
     const info = await transporter.sendMail(mailOptions);
